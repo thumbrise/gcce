@@ -23,7 +23,7 @@ func TestWire_Simple(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
 
@@ -46,7 +46,7 @@ func TestWire_Chain(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 2)
 
@@ -68,7 +68,7 @@ func TestWire_WithError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -89,7 +89,7 @@ func TestWire_CustomPackageName(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -108,7 +108,7 @@ func TestWire_CustomFunctionName(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -127,7 +127,7 @@ func TestWire_Error_MissingRoot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -139,7 +139,7 @@ func TestWire_Error_MissingRoot(t *testing.T) {
 
 func TestWire_Error_MissingRootOption(t *testing.T) {
 	c, _ := composition.New()
-	steps, _ := c.Compile()
+	steps, _ := c.Resolve()
 
 	var buf bytes.Buffer
 

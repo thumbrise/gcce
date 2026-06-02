@@ -60,7 +60,7 @@ func FunctionName(name string) Option {
 }
 
 // Compile generates Go source code from composition steps.
-func Compile(w io.Writer, steps []composition.GraphStep, opts ...Option) error {
+func Compile(w io.Writer, steps []composition.Step, opts ...Option) error {
 	var cfg config
 	for _, opt := range opts {
 		opt.apply(&cfg)

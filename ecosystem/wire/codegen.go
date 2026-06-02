@@ -58,7 +58,7 @@ func typeExpr(ct composition.CompileType) *jen.Statement {
 	return s
 }
 
-func generate(steps []composition.GraphStep, cfg *config) (string, error) {
+func generate(steps []composition.Step, cfg *config) (string, error) {
 	rootIdx, typeMap := buildIndex(steps, cfg.rootType.String())
 	switch {
 	case rootIdx < -1:
@@ -99,7 +99,7 @@ func generate(steps []composition.GraphStep, cfg *config) (string, error) {
 	return f.GoString(), nil
 }
 
-func buildBody(steps []composition.GraphStep, rootIdx int, returnsErr bool, typeMap map[string][]int, vars map[int]string) ([]jen.Code, error) {
+func buildBody(steps []composition.Step, rootIdx int, returnsErr bool, typeMap map[string][]int, vars map[int]string) ([]jen.Code, error) {
 	var body []jen.Code
 
 	for idx := 0; idx <= rootIdx; idx++ {
@@ -149,7 +149,7 @@ func buildBody(steps []composition.GraphStep, rootIdx int, returnsErr bool, type
 	return body, nil
 }
 
-func buildIndex(steps []composition.GraphStep, rootStr string) (int, map[string][]int) {
+func buildIndex(steps []composition.Step, rootStr string) (int, map[string][]int) {
 	rootIdx := -1
 	typeMap := map[string][]int{}
 

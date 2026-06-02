@@ -46,7 +46,7 @@ func TestCompile_SimpleChain(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 2)
 	require.Equal(t, "*http.ServeMux", steps[0].TargetType.Type)
@@ -62,7 +62,7 @@ func TestCompile_InterfaceBinding(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 3)
 	require.Equal(t, "http.Handler", steps[2].ArgsTypes[0].Type)
@@ -76,7 +76,7 @@ func TestCompile_Collection(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 3)
 	require.Equal(t, "[]*http.Server", steps[2].ArgsTypes[0].Type)
@@ -86,7 +86,7 @@ func TestCompile_ConstructorWithError(t *testing.T) {
 	c, err := composition.New(composition.Provide(newErrSrv))
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
 	require.True(t, steps[0].ReturnsErr)
@@ -96,7 +96,7 @@ func TestCompile_ConstructorWithCleanup(t *testing.T) {
 	c, err := composition.New(composition.Provide(newCleanSrv))
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
 	require.False(t, steps[0].ReturnsErr)
@@ -106,7 +106,7 @@ func TestCompile_ConstructorWithCleanupAndError(t *testing.T) {
 	c, err := composition.New(composition.Provide(newCleanErrSrv))
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
 	require.True(t, steps[0].ReturnsErr)
@@ -116,7 +116,7 @@ func TestCompile_NoDeps(t *testing.T) {
 	c, err := composition.New(composition.Provide(newSrv))
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
 	require.Empty(t, steps[0].ArgsTypes)
@@ -128,7 +128,7 @@ func TestCompile_Metadata(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Equal(t, "prod", steps[0].Metadata["env"])
 }
@@ -141,7 +141,7 @@ func TestCompile_DeepChain(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 3)
 	require.Equal(t, "*composition_test.chainA", steps[0].TargetType.Type)
@@ -158,7 +158,7 @@ func TestCompile_Error_DuplicateSingleton(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Compile()
+	steps, err := c.Resolve()
 	require.NoError(t, err)
 	require.Len(t, steps, 2)
 	require.Equal(t, "*http.Server", steps[0].TargetType.Type)
@@ -173,7 +173,7 @@ func TestCompile_Error_Cycle(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = c.Compile()
+	_, err = c.Resolve()
 	require.ErrorIs(t, err, composition.ErrCycleDetected)
 }
 
@@ -183,7 +183,7 @@ func TestCompile_Error_MissingDependency(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = c.Compile()
+	_, err = c.Resolve()
 	require.ErrorIs(t, err, composition.ErrTypeNotExists)
 }
 

@@ -13,8 +13,8 @@ type CompileType struct {
 	ImportPath string `json:"import_path,omitempty"`
 }
 
-// GraphStep is an atomic composition instruction for code generators.
-type GraphStep struct {
+// Step is an atomic composition instruction for code generators.
+type Step struct {
 	Index       int           `json:"index"`
 	TargetType  CompileType   `json:"target_type"`
 	PackagePath string        `json:"package_path,omitempty"`
@@ -27,14 +27,14 @@ type GraphStep struct {
 // Metadata is informational baggage for the receiver's ecosystem.
 type Metadata map[string]string
 
-// Graph is a dependency graph.
-type Graph struct {
+// Composition is a dependency graph.
+type Composition struct {
 	schema *defaultSchema
 }
 
-// New creates a Graph from options.
-func New(options ...Option) (*Graph, error) {
-	c := &Graph{schema: newDefaultSchema()}
+// New creates a Composition from options.
+func New(options ...Option) (*Composition, error) {
+	c := &Composition{schema: newDefaultSchema()}
 
 	var cfg config
 	for _, opt := range options {
@@ -50,8 +50,8 @@ func New(options ...Option) (*Graph, error) {
 	return c, nil
 }
 
-// Compile walks all registered nodes and returns a bottom-up plan.
-func (c *Graph) Compile() ([]GraphStep, error) {
+// Resolve walks all registered providers and returns a bottom-up plan.
+func (c *Composition) Resolve() ([]Step, error) {
 	types := make([]reflect.Type, 0, len(c.schema.nodes))
 	for t := range c.schema.nodes {
 		types = append(types, t)
@@ -61,7 +61,7 @@ func (c *Graph) Compile() ([]GraphStep, error) {
 		return types[i].String() < types[j].String()
 	})
 
-	var steps []GraphStep
+	var steps []Step
 
 	walked := map[*node]bool{}
 
@@ -87,7 +87,7 @@ func (c *Graph) Compile() ([]GraphStep, error) {
 	return steps, nil
 }
 
-func dfsWalk(s schema, n *node, steps []GraphStep, visited map[*node]bool) ([]GraphStep, error) {
+func dfsWalk(s schema, n *node, steps []Step, visited map[*node]bool) ([]Step, error) {
 	if n == nil || visited[n] {
 		return steps, nil
 	}
@@ -107,7 +107,7 @@ func dfsWalk(s schema, n *node, steps []GraphStep, visited map[*node]bool) ([]Gr
 	}
 
 	if ctor, ok := n.compiler.(*constructorCompiler); ok {
-		step := GraphStep{
+		step := Step{
 			TargetType: CompileType{
 				Type:       n.rt.String(),
 				ImportPath: importPathForType(n.rt),
@@ -147,7 +147,7 @@ func importPathForType(t reflect.Type) string {
 	return t.PkgPath()
 }
 
-func (c *Graph) provide(constructor Constructor, options ...ProvideOption) error {
+func (c *Composition) provide(constructor Constructor, options ...ProvideOption) error {
 	if constructor == nil {
 		return ErrNilConstructor
 	}
@@ -157,17 +157,17 @@ func (c *Graph) provide(constructor Constructor, options ...ProvideOption) error
 		opt.applyProvide(&params)
 	}
 
-	n, err := newConstructorNode(constructor)
+	nod, err := newConstructorNode(constructor)
 	if err != nil {
 		return err
 	}
 
-	n.metadata = params.Metadata
+	nod.metadata = params.Metadata
 
-	return c.provideNode(n, params)
+	return c.provideNode(nod, params)
 }
 
-func (c *Graph) provideNode(n *node, params ProvideParams) error {
+func (c *Composition) provideNode(n *node, params ProvideParams) error {
 	c.schema.register(n)
 
 	for _, cur := range params.Interfaces {
