@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
 	"github.com/thumbrise/gcce/composition"
 )
 
@@ -23,9 +22,11 @@ func newCleanErrSrv() (*http.Server, func(), error) { return &http.Server{}, fun
 func newSrvCount(s []*http.Server) int { return len(s) }
 
 // deep chain
-type chainA struct{}
-type chainB struct{ a *chainA }
-type chainC struct{ b *chainB }
+type (
+	chainA struct{}
+	chainB struct{ a *chainA }
+	chainC struct{ b *chainB }
+)
 
 func newChainA() *chainA          { return &chainA{} }
 func newChainB(a *chainA) *chainB { return &chainB{a} }

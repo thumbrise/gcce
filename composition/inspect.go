@@ -27,9 +27,11 @@ func inspectFunction(fn interface{}) (function, bool) {
 	if reflect.ValueOf(fn).Kind() != reflect.Func {
 		return function{}, false
 	}
+
 	val := reflect.ValueOf(fn)
 	typ := val.Type()
 	funcForPC := runtime.FuncForPC(val.Pointer())
+
 	return function{
 		Name:  funcForPC.Name(),
 		Type:  typ,
@@ -42,14 +44,17 @@ func isAnonymous(fn function) bool {
 	if name == "" {
 		return true
 	}
+
 	lastDot := strings.LastIndex(name, ".")
 	if lastDot < 0 {
 		return true
 	}
+
 	lastSeg := name[lastDot+1:]
 	if len(lastSeg) > 4 && lastSeg[:4] == "func" && lastSeg[4] >= '0' && lastSeg[4] <= '9' {
 		return true
 	}
+
 	return false
 }
 
@@ -60,12 +65,14 @@ type link struct {
 
 func inspectInterfacePointer(i interface{}) (*link, error) {
 	if i == nil {
-		return nil, fmt.Errorf("nil: not a pointer to interface")
+		return nil, ErrNilInterface
 	}
+
 	typ := reflect.TypeOf(i)
-	if typ.Kind() != reflect.Ptr || typ.Elem().Kind() != reflect.Interface {
-		return nil, fmt.Errorf("%s: not a pointer to interface", typ)
+	if typ.Kind() != reflect.Pointer || typ.Elem().Kind() != reflect.Interface {
+		return nil, fmt.Errorf("%s: %w", typ, ErrNotInterfacePtr)
 	}
+
 	return &link{
 		Name: typ.Elem().Name(),
 		Type: typ.Elem(),

@@ -8,15 +8,18 @@ import (
 func newConstructorNode(ctor interface{}) (*node, error) {
 	f, valid := inspectFunction(ctor)
 	if !valid {
-		return nil, fmt.Errorf("invalid constructor signature, got %s", reflect.TypeOf(ctor))
+		return nil, fmt.Errorf("%w, got %s", ErrInvalidCtorSignature, reflect.TypeOf(ctor))
 	}
+
 	cmp, ok := newConstructorCompiler(f)
 	if !ok {
 		if isAnonymous(f) {
-			return nil, fmt.Errorf("anonymous constructor: named package-level functions only, got %s", f.Type)
+			return nil, fmt.Errorf("%w, got %s", ErrAnonymousCtor, f.Type)
 		}
-		return nil, fmt.Errorf("invalid constructor signature, got %s", f.Type)
+
+		return nil, fmt.Errorf("%w, got %s", ErrInvalidCtorSignature, f.Type)
 	}
+
 	return &node{
 		rt:       f.Out(0),
 		compiler: cmp,

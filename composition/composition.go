@@ -28,15 +28,18 @@ type Container struct {
 // New creates a Container from options.
 func New(options ...Option) (*Container, error) {
 	c := &Container{schema: newDefaultSchema()}
+
 	var cfg config
 	for _, opt := range options {
 		opt.apply(&cfg)
 	}
+
 	for _, p := range cfg.provides {
 		if err := c.provide(p.ctor, p.options...); err != nil {
 			return nil, fmt.Errorf("%s: %w", p.frame, err)
 		}
 	}
+
 	return c, nil
 }
 
@@ -48,11 +51,12 @@ func (c *Container) Provide(constructor Constructor, options ...ProvideOption) e
 // Compile walks the graph from the invocation and returns a bottom-up plan.
 func (c *Container) Compile(invocation Invocation) ([]CompileStep, error) {
 	if invocation == nil {
-		return nil, fmt.Errorf("%w, got nil", errInvalidInvocationSignature)
+		return nil, fmt.Errorf("%w, got nil", ErrInvalidInvocationSignature)
 	}
+
 	fn, valid := inspectFunction(invocation)
 	if !valid || !validateInvocation(fn) {
-		return nil, fmt.Errorf("%w, got %s", errInvalidInvocationSignature, reflect.TypeOf(invocation))
+		return nil, fmt.Errorf("%w, got %s", ErrInvalidInvocationSignature, reflect.TypeOf(invocation))
 	}
 
 	nodes, err := parseInvocationParameters(fn, c.schema)
@@ -61,12 +65,14 @@ func (c *Container) Compile(invocation Invocation) ([]CompileStep, error) {
 	}
 
 	var steps []CompileStep
+
 	visited := map[*node]bool{}
 
 	for _, n := range nodes {
 		if err := c.schema.prepare(n); err != nil {
 			return nil, err
 		}
+
 		steps, err = c.dfsWalk(n, steps, visited)
 		if err != nil {
 			return nil, err
@@ -79,6 +85,7 @@ func (c *Container) Compile(invocation Invocation) ([]CompileStep, error) {
 		s.Index = i
 		ordered[len(steps)-1-i] = s
 	}
+
 	for i := range ordered {
 		ordered[i].Index = i
 	}
@@ -90,6 +97,7 @@ func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool
 	if n == nil || visited[n] {
 		return steps, nil
 	}
+
 	visited[n] = true
 
 	if ctor, ok := n.compiler.(*constructorCompiler); ok {
@@ -99,6 +107,7 @@ func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool
 			Metadata:   n.metadata,
 		}
 		fullName := ctor.fn.Name
+
 		lastDot := strings.LastIndex(fullName, ".")
 		if lastDot != -1 {
 			step.PackagePath = fullName[:lastDot]
@@ -106,9 +115,11 @@ func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool
 		} else {
 			step.FuncName = fullName
 		}
+
 		for i := 0; i < ctor.fn.NumIn(); i++ {
 			step.ArgsTypes = append(step.ArgsTypes, ctor.fn.In(i).String())
 		}
+
 		steps = append(steps, step)
 	}
 
@@ -116,68 +127,81 @@ func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", n, err)
 	}
+
 	for _, child := range childNodes {
 		steps, err = c.dfsWalk(child, steps, visited)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return steps, nil
 }
 
 func (c *Container) provide(constructor Constructor, options ...ProvideOption) error {
 	if constructor == nil {
-		return fmt.Errorf("invalid constructor, got nil")
+		return ErrNilConstructor
 	}
+
 	params := ProvideParams{}
 	for _, opt := range options {
 		opt.applyProvide(&params)
 	}
+
 	n, err := newConstructorNode(constructor)
 	if err != nil {
 		return err
 	}
+
 	n.metadata = params.Metadata
+
 	return c.provideNode(n, params)
 }
 
 func (c *Container) provideNode(n *node, params ProvideParams) error {
 	c.schema.register(n)
+
 	for _, cur := range params.Interfaces {
 		i, err := inspectInterfacePointer(cur)
 		if err != nil {
 			return err
 		}
+
 		if !n.rt.Implements(i.Type) {
-			return fmt.Errorf("%s does not implement %s", n.rt, i.Type)
+			return fmt.Errorf("%s %w %s", n.rt, ErrNotImplement, i.Type)
 		}
+
 		c.schema.register(&node{
 			rt:       i.Type,
 			compiler: n.compiler,
 			metadata: n.metadata,
 		})
 	}
+
 	return nil
 }
 
 // --- DSL types ---
 
 type Option interface {
-	apply(*config)
+	apply(cfg *config)
 }
 
 type ProvideOption interface {
-	applyProvide(*ProvideParams)
+	applyProvide(params *ProvideParams)
 }
 
-type Constructor interface{}
-type Invocation interface{}
-type Interface interface{}
+type (
+	Constructor interface{}
+	Invocation  interface{}
+	Interface   interface{}
+)
 
 // --- DSL functions ---
 
 func Provide(ctor Constructor, options ...ProvideOption) Option {
 	frame := stacktrace(0)
+
 	return option(func(cfg *config) {
 		cfg.provides = append(cfg.provides, provideOpt{
 			frame:   frame,
@@ -198,6 +222,7 @@ func Meta(key, value string) ProvideOption {
 		if params.Metadata == nil {
 			params.Metadata = Metadata{}
 		}
+
 		params.Metadata[key] = value
 	})
 }

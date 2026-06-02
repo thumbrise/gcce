@@ -11,7 +11,9 @@ func stacktrace(skip int) (frame callerFrame) {
 	if !ok {
 		return callerFrame{}
 	}
+
 	f := runtime.FuncForPC(pc)
+
 	return callerFrame{
 		function: shortFuncName(f),
 		file:     file,
@@ -37,5 +39,6 @@ func shortFuncName(f *runtime.Func) string {
 	shortName = strings.Replace(shortName, "(", "", 1)
 	shortName = strings.Replace(shortName, "*", "", 1)
 	shortName = strings.Replace(shortName, ")", "", 1)
+
 	return shortName
 }

@@ -72,7 +72,6 @@ linters:
     - nlreturn
     - noctx
     - nolintlint
-    - nonamedreturns
     - nosprintfhostport
     - perfsprint
     - prealloc

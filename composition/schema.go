@@ -25,7 +25,8 @@ func (s *defaultSchema) register(n *node) {
 }
 
 func (s *defaultSchema) prepare(n *node) error {
-	var marks = map[*node]int{}
+	marks := map[*node]int{}
+
 	return visit(s, n, marks)
 }
 
@@ -33,13 +34,16 @@ func (s *defaultSchema) find(t reflect.Type) (*node, error) {
 	nodes, ok := s.list(t)
 	if ok {
 		if len(nodes) > 1 {
-			return nil, fmt.Errorf("%s: %w, maybe you need to use group: []%s", t, errMultipleDefinitions, t)
+			return nil, fmt.Errorf("%s: %w, maybe you need to use group: []%s", t, ErrMultipleDefinitions, t)
 		}
+
 		return nodes[0], nil
 	}
+
 	if t.Kind() == reflect.Slice {
 		return s.group(t)
 	}
+
 	return nil, fmt.Errorf("%s %w", t, ErrTypeNotExists)
 }
 
@@ -48,6 +52,7 @@ func (s *defaultSchema) group(t reflect.Type) (*node, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s %w", t, ErrTypeNotExists)
 	}
+
 	return &node{
 		compiler: newGroupCompiler(t, elems),
 		rt:       t,
@@ -61,35 +66,11 @@ func (s *defaultSchema) list(t reflect.Type) (nodes []*node, ok bool) {
 			ok = true
 		}
 	}
+
 	if n, o := s.nodes[t]; o {
 		nodes = append(nodes, n...)
 		ok = true
 	}
+
 	return nodes, ok
-}
-
-func (s *defaultSchema) addParent(parent *defaultSchema) error {
-	if parent == s {
-		return fmt.Errorf("self cycle detected")
-	}
-	if parent.isAncestor(s) {
-		return fmt.Errorf("cycle detected")
-	}
-	if s.isAncestor(parent) {
-		return fmt.Errorf("parent already chained")
-	}
-	s.parents = append(s.parents, parent)
-	return nil
-}
-
-func (s *defaultSchema) isAncestor(a *defaultSchema) bool {
-	for _, parent := range s.parents {
-		if parent == a {
-			return true
-		}
-		if parent.isAncestor(a) {
-			return true
-		}
-	}
-	return false
 }
