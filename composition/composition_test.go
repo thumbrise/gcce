@@ -174,8 +174,7 @@ func TestCompile_Error_Cycle(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = c.Compile()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "cycle detected")
+	require.ErrorIs(t, err, composition.ErrCycleDetected)
 }
 
 func TestCompile_Error_MissingDependency(t *testing.T) {
@@ -185,13 +184,12 @@ func TestCompile_Error_MissingDependency(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = c.Compile()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not exists")
+	require.ErrorIs(t, err, composition.ErrTypeNotExists)
 }
 
 func TestCompile_Error_NilConstructor(t *testing.T) {
 	_, err := composition.New(composition.Provide(nil))
-	require.Error(t, err)
+	require.ErrorIs(t, err, composition.ErrNilConstructor)
 }
 
 func TestCompile_Error_NonFunctionCtor(t *testing.T) {
@@ -208,6 +206,5 @@ func TestCompile_Error_AnonymousConstructor(t *testing.T) {
 	_, err := composition.New(
 		composition.Provide(func() *http.Server { return &http.Server{} }),
 	)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "anonymous")
+	require.ErrorIs(t, err, composition.ErrAnonymousCtor)
 }

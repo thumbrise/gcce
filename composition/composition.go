@@ -3,6 +3,7 @@ package composition
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -60,8 +61,17 @@ func (c *Container) Compile() ([]CompileStep, error) {
 
 	walked := map[*node]bool{}
 
-	for _, ns := range c.schema.nodes {
-		for _, n := range ns {
+	types := make([]reflect.Type, 0, len(c.schema.nodes))
+	for t := range c.schema.nodes {
+		types = append(types, t)
+	}
+
+	sort.Slice(types, func(i, j int) bool {
+		return types[i].String() < types[j].String()
+	})
+
+	for _, t := range types {
+		for _, n := range c.schema.nodes[t] {
 			if err := c.schema.prepare(n); err != nil {
 				return nil, err
 			}
