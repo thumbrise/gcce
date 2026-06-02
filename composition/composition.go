@@ -52,10 +52,6 @@ func New(options ...Option) (*Graph, error) {
 
 // Compile walks all registered nodes and returns a bottom-up plan.
 func (c *Graph) Compile() ([]GraphStep, error) {
-	var steps []GraphStep
-
-	walked := map[*node]bool{}
-
 	types := make([]reflect.Type, 0, len(c.schema.nodes))
 	for t := range c.schema.nodes {
 		types = append(types, t)
@@ -64,6 +60,10 @@ func (c *Graph) Compile() ([]GraphStep, error) {
 	sort.Slice(types, func(i, j int) bool {
 		return types[i].String() < types[j].String()
 	})
+
+	var steps []GraphStep
+
+	walked := map[*node]bool{}
 
 	for _, t := range types {
 		for _, n := range c.schema.nodes[t] {
@@ -188,51 +188,6 @@ func (c *Graph) provideNode(n *node, params ProvideParams) error {
 	}
 
 	return nil
-}
-
-// --- DSL types ---
-
-type Option interface {
-	apply(cfg *config)
-}
-
-type ProvideOption interface {
-	applyProvide(params *ProvideParams)
-}
-
-type (
-	Constructor interface{}
-	Interface   interface{}
-)
-
-// --- DSL functions ---
-
-func Provide(ctor Constructor, options ...ProvideOption) Option {
-	frame := stacktrace(0)
-
-	return option(func(cfg *config) {
-		cfg.provides = append(cfg.provides, provideOpt{
-			frame:   frame,
-			ctor:    ctor,
-			options: options,
-		})
-	})
-}
-
-func As(iface Interface) ProvideOption {
-	return provideOption(func(params *ProvideParams) {
-		params.Interfaces = append(params.Interfaces, iface)
-	})
-}
-
-func Meta(key, value string) ProvideOption {
-	return provideOption(func(params *ProvideParams) {
-		if params.Metadata == nil {
-			params.Metadata = Metadata{}
-		}
-
-		params.Metadata[key] = value
-	})
 }
 
 // --- internal types ---
