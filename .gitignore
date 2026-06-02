@@ -1,4 +1,2 @@
-coverage.txt
-profile.out
-vendor
 .idea
+node_modules
