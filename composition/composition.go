@@ -6,18 +6,24 @@ import (
 	"strings"
 )
 
-// CompileStep is an atomic composition instruction for code generators.
-type CompileStep struct {
-	Index       int      `json:"index"`
-	TargetType  string   `json:"target_type"`
-	PackagePath string   `json:"package_path,omitempty"`
-	FuncName    string   `json:"func_name,omitempty"`
-	ReturnsErr  bool     `json:"returns_err"`
-	ArgsTypes   []string `json:"args_types,omitempty"`
-	Metadata    Metadata `json:"metadata,omitempty"`
+// CompileType carries a type name and its import path for code generators.
+type CompileType struct {
+	Type       string `json:"type"`
+	ImportPath string `json:"import_path,omitempty"`
 }
 
-// Metadata is informational baggage for the generator.
+// CompileStep is an atomic composition instruction for code generators.
+type CompileStep struct {
+	Index       int           `json:"index"`
+	TargetType  CompileType   `json:"target_type"`
+	PackagePath string        `json:"package_path,omitempty"`
+	FuncName    string        `json:"func_name,omitempty"`
+	ReturnsErr  bool          `json:"returns_err"`
+	ArgsTypes   []CompileType `json:"args_types,omitempty"`
+	Metadata    Metadata      `json:"metadata,omitempty"`
+}
+
+// Metadata is informational baggage for the receiver's ecosystem.
 type Metadata map[string]string
 
 // Container is a dependency graph.
@@ -48,49 +54,32 @@ func (c *Container) Provide(constructor Constructor, options ...ProvideOption) e
 	return c.provide(constructor, options...)
 }
 
-// Compile walks the graph from the invocation and returns a bottom-up plan.
-func (c *Container) Compile(invocation Invocation) ([]CompileStep, error) {
-	if invocation == nil {
-		return nil, fmt.Errorf("%w, got nil", ErrInvalidInvocationSignature)
-	}
-
-	fn, valid := inspectFunction(invocation)
-	if !valid || !validateInvocation(fn) {
-		return nil, fmt.Errorf("%w, got %s", ErrInvalidInvocationSignature, reflect.TypeOf(invocation))
-	}
-
-	nodes, err := parseInvocationParameters(fn, c.schema)
-	if err != nil {
-		return nil, err
-	}
-
+// Compile walks all registered nodes and returns a bottom-up plan.
+func (c *Container) Compile() ([]CompileStep, error) {
 	var steps []CompileStep
 
-	visited := map[*node]bool{}
+	walked := map[*node]bool{}
 
-	for _, n := range nodes {
-		if err := c.schema.prepare(n); err != nil {
-			return nil, err
+	for _, ns := range c.schema.nodes {
+		for _, n := range ns {
+			if err := c.schema.prepare(n); err != nil {
+				return nil, err
+			}
+
+			var err error
+
+			steps, err = c.dfsWalk(n, steps, walked)
+			if err != nil {
+				return nil, err
+			}
 		}
-
-		steps, err = c.dfsWalk(n, steps, visited)
-		if err != nil {
-			return nil, err
-		}
 	}
 
-	// reverse to bottom-up order
-	ordered := make([]CompileStep, len(steps))
-	for i, s := range steps {
-		s.Index = i
-		ordered[len(steps)-1-i] = s
+	for i := range steps {
+		steps[i].Index = i
 	}
 
-	for i := range ordered {
-		ordered[i].Index = i
-	}
-
-	return ordered, nil
+	return steps, nil
 }
 
 func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool) ([]CompileStep, error) {
@@ -100,9 +89,24 @@ func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool
 
 	visited[n] = true
 
+	childNodes, err := n.deps(c.schema)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", n, err)
+	}
+
+	for _, child := range childNodes {
+		steps, err = c.dfsWalk(child, steps, visited)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if ctor, ok := n.compiler.(*constructorCompiler); ok {
 		step := CompileStep{
-			TargetType: n.rt.String(),
+			TargetType: CompileType{
+				Type:       n.rt.String(),
+				ImportPath: importPathForType(n.rt),
+			},
 			ReturnsErr: ctor.typ == ctorValueError || ctor.typ == ctorValueCleanupError,
 			Metadata:   n.metadata,
 		}
@@ -117,25 +121,25 @@ func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool
 		}
 
 		for i := 0; i < ctor.fn.NumIn(); i++ {
-			step.ArgsTypes = append(step.ArgsTypes, ctor.fn.In(i).String())
+			in := ctor.fn.In(i)
+			step.ArgsTypes = append(step.ArgsTypes, CompileType{
+				Type:       in.String(),
+				ImportPath: importPathForType(in),
+			})
 		}
 
 		steps = append(steps, step)
 	}
 
-	childNodes, err := n.deps(c.schema)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", n, err)
-	}
-
-	for _, child := range childNodes {
-		steps, err = c.dfsWalk(child, steps, visited)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return steps, nil
+}
+
+func importPathForType(t reflect.Type) string {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+		t = t.Elem()
+	}
+
+	return t.PkgPath()
 }
 
 func (c *Container) provide(constructor Constructor, options ...ProvideOption) error {
@@ -193,7 +197,6 @@ type ProvideOption interface {
 
 type (
 	Constructor interface{}
-	Invocation  interface{}
 	Interface   interface{}
 )
 
