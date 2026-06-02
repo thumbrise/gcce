@@ -13,8 +13,8 @@ type CompileType struct {
 	ImportPath string `json:"import_path,omitempty"`
 }
 
-// CompileStep is an atomic composition instruction for code generators.
-type CompileStep struct {
+// GraphStep is an atomic composition instruction for code generators.
+type GraphStep struct {
 	Index       int           `json:"index"`
 	TargetType  CompileType   `json:"target_type"`
 	PackagePath string        `json:"package_path,omitempty"`
@@ -27,14 +27,14 @@ type CompileStep struct {
 // Metadata is informational baggage for the receiver's ecosystem.
 type Metadata map[string]string
 
-// Container is a dependency graph.
-type Container struct {
+// Graph is a dependency graph.
+type Graph struct {
 	schema *defaultSchema
 }
 
-// New creates a Container from options.
-func New(options ...Option) (*Container, error) {
-	c := &Container{schema: newDefaultSchema()}
+// New creates a Graph from options.
+func New(options ...Option) (*Graph, error) {
+	c := &Graph{schema: newDefaultSchema()}
 
 	var cfg config
 	for _, opt := range options {
@@ -50,14 +50,9 @@ func New(options ...Option) (*Container, error) {
 	return c, nil
 }
 
-// Provide registers a constructor.
-func (c *Container) Provide(constructor Constructor, options ...ProvideOption) error {
-	return c.provide(constructor, options...)
-}
-
 // Compile walks all registered nodes and returns a bottom-up plan.
-func (c *Container) Compile() ([]CompileStep, error) {
-	var steps []CompileStep
+func (c *Graph) Compile() ([]GraphStep, error) {
+	var steps []GraphStep
 
 	walked := map[*node]bool{}
 
@@ -78,7 +73,7 @@ func (c *Container) Compile() ([]CompileStep, error) {
 
 			var err error
 
-			steps, err = c.dfsWalk(n, steps, walked)
+			steps, err = dfsWalk(c.schema, n, steps, walked)
 			if err != nil {
 				return nil, err
 			}
@@ -92,27 +87,27 @@ func (c *Container) Compile() ([]CompileStep, error) {
 	return steps, nil
 }
 
-func (c *Container) dfsWalk(n *node, steps []CompileStep, visited map[*node]bool) ([]CompileStep, error) {
+func dfsWalk(s schema, n *node, steps []GraphStep, visited map[*node]bool) ([]GraphStep, error) {
 	if n == nil || visited[n] {
 		return steps, nil
 	}
 
 	visited[n] = true
 
-	childNodes, err := n.deps(c.schema)
+	childNodes, err := n.deps(s)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", n, err)
 	}
 
 	for _, child := range childNodes {
-		steps, err = c.dfsWalk(child, steps, visited)
+		steps, err = dfsWalk(s, child, steps, visited)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if ctor, ok := n.compiler.(*constructorCompiler); ok {
-		step := CompileStep{
+		step := GraphStep{
 			TargetType: CompileType{
 				Type:       n.rt.String(),
 				ImportPath: importPathForType(n.rt),
@@ -152,7 +147,7 @@ func importPathForType(t reflect.Type) string {
 	return t.PkgPath()
 }
 
-func (c *Container) provide(constructor Constructor, options ...ProvideOption) error {
+func (c *Graph) provide(constructor Constructor, options ...ProvideOption) error {
 	if constructor == nil {
 		return ErrNilConstructor
 	}
@@ -172,7 +167,7 @@ func (c *Container) provide(constructor Constructor, options ...ProvideOption) e
 	return c.provideNode(n, params)
 }
 
-func (c *Container) provideNode(n *node, params ProvideParams) error {
+func (c *Graph) provideNode(n *node, params ProvideParams) error {
 	c.schema.register(n)
 
 	for _, cur := range params.Interfaces {
