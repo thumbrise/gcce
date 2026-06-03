@@ -1,0 +1,157 @@
+package emit
+
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"runtime"
+	"time"
+
+	"github.com/thumbrise/op-universal-schema-go/schema"
+)
+
+var (
+	ErrIsNotFunction   = errors.New("is not a function")
+	ErrIsAnonymous     = errors.New("is anonymous")
+	ErrUnsupportedKind = errors.New("unsupported kind")
+)
+
+func FunctionToOperation(fn interface{}) (schema.Operation, error) {
+	operation := schema.Operation{}
+
+	fnReflVal := reflect.ValueOf(fn)
+	if fnReflVal.Kind() != reflect.Func {
+		return operation, ErrIsNotFunction
+	}
+
+	fnName := runtime.FuncForPC(fnReflVal.Pointer()).Name()
+	if fnName == "" {
+		return operation, ErrIsAnonymous
+	}
+
+	operation.ID = fnName
+
+	fnReflTyp := fnReflVal.Type()
+	inputRail := make([]schema.Term, 0, fnReflTyp.NumIn())
+
+	for i := range fnReflTyp.NumIn() {
+		inTyp := fnReflTyp.In(i)
+
+		term, err := reflTypToTerm(inTyp)
+		if err != nil {
+			return operation, err
+		}
+
+		inputRail = append(inputRail, term)
+	}
+
+	outputRail := make([]schema.Term, 0, fnReflTyp.NumOut())
+	errorRail := make([]schema.Term, 0, fnReflTyp.NumOut())
+	errorTypElem := reflect.TypeOf(new(error)).Elem()
+
+	for i := range fnReflTyp.NumOut() {
+		outTyp := fnReflTyp.Out(i)
+
+		term, err := reflTypToTerm(outTyp)
+		if err != nil {
+			return operation, err
+		}
+
+		if outTyp.Implements(errorTypElem) {
+			errorRail = append(errorRail, term)
+		} else {
+			outputRail = append(outputRail, term)
+		}
+	}
+
+	operation.Input = inputRail
+	operation.Output = outputRail
+	operation.Error = errorRail
+
+	return operation, nil
+}
+
+func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
+	id := ""
+	typElem := typ
+	required := true
+
+	if typ.Kind() == reflect.Pointer {
+		id += "*"
+		typElem = typ.Elem()
+		required = false
+	}
+
+	prefix := typElem.PkgPath()
+	if prefix != "" {
+		prefix += "."
+	}
+
+	id += prefix + typElem.Name()
+
+	result := schema.Term{}
+
+	kind, err := kindFromType(typElem)
+	if err != nil {
+		return result, err
+	}
+
+	result.ID = id
+	result.Required = &required
+	result.Kind = &kind
+	result.Of = []schema.Term{}
+	result.Trait = []schema.Term{}
+
+	return result, nil
+}
+
+// kindFromType maps a Go reflect.Type to an OP schema.Kind.
+// It handles special types like time.Time and byte slices before falling back to reflect.Kind.
+//
+//nolint:cyclop // No other ways
+func kindFromType(t reflect.Type) (schema.Kind, error) {
+	// Special case: time.Time -> datetime
+	if t == reflect.TypeOf(time.Time{}) {
+		return schema.KindDatetime, nil
+	}
+
+	// Special case: []byte and [N]byte -> binary
+	if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
+		return schema.KindBinary, nil
+	}
+
+	if t.Kind() == reflect.Array && t.Elem().Kind() == reflect.Uint8 {
+		return schema.KindBinary, nil
+	}
+
+	switch t.Kind() {
+	case reflect.String:
+		return schema.KindString, nil
+	case reflect.Bool:
+		return schema.KindBoolean, nil
+	case reflect.Float32, reflect.Float64:
+		return schema.KindFloat, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return schema.KindInteger, nil
+	case reflect.Array, reflect.Slice:
+		// If we didn't catch []byte above, it's a generic array
+		return schema.KindArray, nil
+	case reflect.Struct:
+		return schema.KindObject, nil
+	case reflect.Map:
+		// Map is represented as object in OP
+		return schema.KindObject, nil
+	case reflect.Complex64, reflect.Complex128:
+		return "", fmt.Errorf("%w: complex numbers are not supported (type %v)", ErrUnsupportedKind, t)
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+		return "", fmt.Errorf("%w: unserializable type %v", ErrUnsupportedKind, t.Kind())
+	case reflect.Invalid:
+		return "", fmt.Errorf("%w: literally invalid reflect kind", ErrUnsupportedKind)
+	case reflect.Pointer, reflect.Uintptr:
+		return "", fmt.Errorf("%w: unexpected pointer (type %v)", ErrUnsupportedKind, t)
+
+	default:
+		return "", fmt.Errorf("%w: %v", ErrUnsupportedKind, t.Kind())
+	}
+}
