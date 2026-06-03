@@ -55,8 +55,8 @@ func TestBindingToOperation_Implements(t *testing.T) {
 
 	found := false
 
-	for _, t := range op.Output[0].Trait {
-		if t.ID == trait.ImplementsID {
+	for _, tr := range op.Output[0].Trait {
+		if tr.ID == trait.ImplementsID {
 			found = true
 
 			break

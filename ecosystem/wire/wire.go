@@ -67,10 +67,8 @@ func Compile(w io.Writer, operations []op.Operation, opts ...Option) error {
 	}
 
 	if cfg.functionName == "" {
-		lastDot := stringsLastDot(cfg.rootFQN)
-
 		short := cfg.rootFQN
-		if lastDot >= 0 {
+		if lastDot := strings.LastIndex(cfg.rootFQN, "."); lastDot >= 0 {
 			short = cfg.rootFQN[lastDot+1:]
 		}
 
@@ -99,14 +97,4 @@ func fqnOf(t reflect.Type) string {
 	}
 
 	return t.PkgPath() + "." + t.Name()
-}
-
-func stringsLastDot(s string) int {
-	for i := len(s) - 1; i >= 0; i-- {
-		if s[i] == '.' {
-			return i
-		}
-	}
-
-	return -1
 }

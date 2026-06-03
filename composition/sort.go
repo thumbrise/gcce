@@ -10,21 +10,24 @@ import (
 var ErrCyclicDependency = errors.New("cyclic or unresolvable dependency detected in remaining steps")
 
 func SortOperations(raw []op.Operation) ([]op.Operation, error) {
+	pending := make([]op.Operation, len(raw))
+	copy(pending, raw)
+
 	ordered := make([]op.Operation, 0, len(raw))
 	readyTypes := make(map[string]bool)
 
-	for len(raw) > 0 {
+	for len(pending) > 0 {
 		progress := false
 
-		for i := 0; i < len(raw); i++ {
-			if !canResolve(raw[i], readyTypes) {
+		for i := 0; i < len(pending); i++ {
+			if !canResolve(pending[i], readyTypes) {
 				continue
 			}
 
-			ordered = append(ordered, raw[i])
-			markReady(raw[i], readyTypes)
+			ordered = append(ordered, pending[i])
+			markReady(pending[i], readyTypes)
 
-			raw = append(raw[:i], raw[i+1:]...)
+			pending = append(pending[:i], pending[i+1:]...)
 			i--
 			progress = true
 		}
