@@ -149,13 +149,13 @@ func (ctr *Constructor) fqnOf(t reflect.Type) string {
 		return "*" + ctr.fqnOf(t.Elem())
 	}
 
+	if t.Name() != "" && t.PkgPath() != "" {
+		return t.PkgPath() + "." + t.Name()
+	}
+
 	if t.Kind() == reflect.Slice {
 		return "[]" + ctr.fqnOf(t.Elem())
 	}
 
-	if t.PkgPath() == "" {
-		return t.Name()
-	}
-
-	return t.PkgPath() + "." + t.Name()
+	return t.Name()
 }
