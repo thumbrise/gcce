@@ -83,6 +83,10 @@ func (ctr *Constructor) Target() string {
 	return ctr.fqnOf(ctr.Type().Out(0))
 }
 
+func (ctr *Constructor) IsVariadic() bool {
+	return ctr.Type().IsVariadic()
+}
+
 func (ctr *Constructor) Dependencies() []string {
 	typ := ctr.Type()
 
@@ -143,6 +147,10 @@ func (ctr *Constructor) fqnOf(t reflect.Type) string {
 
 	if t.Kind() == reflect.Pointer {
 		return "*" + ctr.fqnOf(t.Elem())
+	}
+
+	if t.Kind() == reflect.Slice {
+		return "[]" + ctr.fqnOf(t.Elem())
 	}
 
 	if t.PkgPath() == "" {

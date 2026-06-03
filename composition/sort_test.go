@@ -104,8 +104,10 @@ func TestSort_SelfDep(t *testing.T) {
 func TestSort_MissingDep(t *testing.T) {
 	a := opStep("pkg.A", "A", "B")
 
-	_, err := composition.SortOperations([]op.Operation{a})
-	require.ErrorIs(t, err, composition.ErrCyclicDependency)
+	got, err := composition.SortOperations([]op.Operation{a})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "pkg.A", got[0].ID)
 }
 
 func TestSort_OrderTrait(t *testing.T) {

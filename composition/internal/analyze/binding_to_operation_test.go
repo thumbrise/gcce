@@ -18,10 +18,11 @@ type (
 
 func (m *MyLogger) Log() {}
 
-func NewConfig() Config              { return Config{} }
-func NewServer(cfg Config) *Server   { return &Server{} }
-func NewErrConfig() (*Config, error) { return &Config{}, nil }
-func NewMyLogger() *MyLogger         { return &MyLogger{} }
+func NewConfig() Config                              { return Config{} }
+func NewServer(cfg Config) *Server                   { return &Server{} }
+func NewErrConfig() (*Config, error)                 { return &Config{}, nil }
+func NewMyLogger() *MyLogger                         { return &MyLogger{} }
+func NewVariadicLogger(loggers ...*Logger) *MyLogger { return &MyLogger{} }
 
 func TestBindingToOperation_Simple(t *testing.T) {
 	op, err := analyze.BindingToOperation(&data.Binding{
@@ -81,4 +82,26 @@ func TestBindingToOperation_NoError(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Empty(t, op.Error)
+}
+
+func TestBindingToOperation_VariadicInput(t *testing.T) {
+	op, err := analyze.BindingToOperation(&data.Binding{
+		Constructor: NewVariadicLogger,
+	})
+	require.NoError(t, err)
+	require.Len(t, op.Input, 1)
+	require.Contains(t, op.Input[0].ID, "[]")
+	require.Contains(t, op.Input[0].ID, "Logger")
+
+	found := false
+
+	for _, tr := range op.Input[0].Trait {
+		if tr.ID == trait.VariadicID {
+			found = true
+
+			break
+		}
+	}
+
+	require.True(t, found, "variadic input should have /variadic/ trait")
 }

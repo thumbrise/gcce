@@ -12,7 +12,7 @@ import (
 var (
 	ErrRootNotFound      = errors.New("root type not found")
 	ErrUnresolvable      = errors.New("unresolvable dependency")
-	ErrMultipleProviders = errors.New("multiple providers for type (slice injection not yet supported)")
+	ErrMultipleProviders = errors.New("multiple providers for type")
 )
 
 type factory struct {
@@ -24,6 +24,8 @@ type factory struct {
 	ctorArgs   []string
 	returnsErr bool
 	root       bool
+	external   bool
+	variadic   bool
 }
 
 func resolve(operations []op.Operation, rootFQN string) ([]factory, error) {
@@ -40,16 +42,44 @@ func resolve(operations []op.Operation, rootFQN string) ([]factory, error) {
 	}
 
 	visited := make(map[int]bool)
-	if err := visitDeps(rootIdx, factories, index, visited); err != nil {
+	externalsSet := make(map[string]bool)
+
+	if err := visitDeps(rootIdx, factories, index, visited, externalsSet); err != nil {
 		return nil, err
+	}
+
+	for dep := range externalsSet {
+		if len(index[dep]) > 0 {
+			continue
+		}
+
+		ext := factory{target: dep, external: true}
+		factories = append(factories, ext)
+		visited[len(factories)-1] = true
+		index[dep] = []int{len(factories) - 1}
 	}
 
 	aliases := collectAliases(factories)
 	assignNames(factories, visited, aliases)
 
+	reachable, err := buildReachable(factories, index, rootIdx, visited)
+	if err != nil {
+		return nil, err
+	}
+
+	return reachable, nil
+}
+
+func buildReachable(factories []factory, index map[string][]int, rootIdx int, visited map[int]bool) ([]factory, error) {
 	reachable := make([]factory, 0, len(visited))
 	for i, f := range factories {
 		if !visited[i] {
+			continue
+		}
+
+		if f.external {
+			reachable = append(reachable, f)
+
 			continue
 		}
 
@@ -57,11 +87,11 @@ func resolve(operations []op.Operation, rootFQN string) ([]factory, error) {
 		for j, dep := range f.deps {
 			providers := index[dep]
 			if len(providers) == 0 {
-				return nil, fmt.Errorf("%w: %q for step %q", ErrUnresolvable, dep, f.ctor)
+				return nil, fmt.Errorf("%w: type %q (required by %q)", ErrUnresolvable, dep, f.ctor)
 			}
 
 			if len(providers) > 1 {
-				return nil, fmt.Errorf("%w: %q has %d providers (step %q)", ErrMultipleProviders, dep, len(providers), f.ctor)
+				return nil, fmt.Errorf("%w: type %q has %d providers (required by %q)", ErrMultipleProviders, dep, len(providers), f.ctor)
 			}
 
 			args[j] = factories[providers[0]].varName
@@ -85,8 +115,16 @@ func extract(operations []op.Operation) []factory {
 		target := operation.Output[0].ID
 
 		deps := make([]string, 0, len(operation.Input))
+		variadic := false
+
 		for _, in := range operation.Input {
 			deps = append(deps, in.ID)
+
+			for _, t := range in.Trait {
+				if t.ID == trait.VariadicID {
+					variadic = true
+				}
+			}
 		}
 
 		returnsErr := len(operation.Error) > 0
@@ -107,6 +145,7 @@ func extract(operations []op.Operation) []factory {
 			implements: implements,
 			deps:       deps,
 			returnsErr: returnsErr,
+			variadic:   variadic,
 		})
 	}
 
@@ -135,7 +174,7 @@ func findRoot(rootFQN string, factories []factory) int {
 	return -1
 }
 
-func visitDeps(idx int, factories []factory, index map[string][]int, visited map[int]bool) error {
+func visitDeps(idx int, factories []factory, index map[string][]int, visited map[int]bool, externals map[string]bool) error {
 	if visited[idx] {
 		return nil
 	}
@@ -145,14 +184,16 @@ func visitDeps(idx int, factories []factory, index map[string][]int, visited map
 	for _, dep := range factories[idx].deps {
 		providers := index[dep]
 		if len(providers) == 0 {
-			return fmt.Errorf("%w: %q for step %q", ErrUnresolvable, dep, factories[idx].ctor)
+			externals[dep] = true
+
+			continue
 		}
 
 		if len(providers) > 1 {
-			return fmt.Errorf("%w: %q has %d providers (step %q)", ErrMultipleProviders, dep, len(providers), factories[idx].ctor)
+			return fmt.Errorf("%w: type %q has %d providers (required by %q)", ErrMultipleProviders, dep, len(providers), factories[idx].ctor)
 		}
 
-		if err := visitDeps(providers[0], factories, index, visited); err != nil {
+		if err := visitDeps(providers[0], factories, index, visited, externals); err != nil {
 			return err
 		}
 	}
