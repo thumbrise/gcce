@@ -22,16 +22,26 @@ func opStep(id, target string, deps ...string) op.Operation {
 	}
 }
 
-func opImplements(id, target string, implements []string, deps ...string) op.Operation {
-	implTraits := make([]op.Term, len(implements))
-	for i, impl := range implements {
-		implTraits[i] = op.Term{ID: trait.ImplementsID, Value: impl}
+func opWithImplements(id, target string, contracts []string, deps ...string) op.Operation {
+	input := make([]op.Term, len(deps))
+	for i, d := range deps {
+		input[i] = op.Term{ID: d}
 	}
+
+	outputTargetTraits := make([]op.Term, 0, len(contracts))
+	for _, contract := range contracts {
+		outputTargetTraits = append(outputTargetTraits, trait.NewImplements(contract))
+	}
+
+	output := []op.Term{{
+		ID:    target,
+		Trait: outputTargetTraits,
+	}}
 
 	return op.Operation{
 		ID:     id,
-		Output: []op.Term{{ID: target, Trait: implTraits}},
-		Input:  make([]op.Term, len(deps)),
+		Output: output,
+		Input:  input,
 	}
 }
 
@@ -126,7 +136,7 @@ func TestSort_OrderTrait(t *testing.T) {
 }
 
 func TestSort_ImplementsReady(t *testing.T) {
-	iface := opImplements("pkg.NewLogger", "*pkg.MyLogger", []string{"pkg.Logger"})
+	iface := opWithImplements("pkg.NewLogger", "*pkg.MyLogger", []string{"pkg.Logger"})
 	cons := opStep("pkg.NewApp", "*pkg.App", "pkg.Logger")
 
 	got, err := composition.SortOperations([]op.Operation{iface, cons})
