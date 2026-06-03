@@ -185,6 +185,14 @@ func TestWire_EmptyBindings(t *testing.T) {
 	require.ErrorIs(t, err, ErrRootNotFound)
 }
 
+func TestRoot_NilPanicsWithFriendlyMessage(t *testing.T) {
+	var cfg config
+
+	require.PanicsWithError(t, errRootMustBePtr.Error(), func() {
+		Root(nil).apply(&cfg)
+	})
+}
+
 func TestWire_RootTypeMismatch(t *testing.T) {
 	c, err := composition.New(
 		composition.Bind(NewConfig),

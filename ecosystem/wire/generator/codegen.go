@@ -36,10 +36,15 @@ func generateCode(w io.Writer, factories []factory, cfg Config) error {
 		}
 
 		if fac.returnsErr {
+			returnNil := jen.Nil()
+			if !strings.HasPrefix(cfg.RootType, "*") {
+				returnNil = jen.Op("*").Add(jen.New(typeStmt(cfg.RootType)))
+			}
+
 			body = append(body,
 				jen.List(jen.Id(fac.varName), jen.Err()).Op(":=").Add(ctor).Call(args...),
 				jen.If(jen.Err().Op("!=").Nil()).Block(
-					jen.Return(jen.List(jen.Nil(), jen.Err())),
+					jen.Return(jen.List(returnNil, jen.Err())),
 				),
 			)
 		} else {

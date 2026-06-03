@@ -125,7 +125,6 @@ linters:
       - legacy
 issues:
   whole-files: true
-  fix: true
 severity:
   default: error
 formatters:

@@ -2,8 +2,12 @@ package generator //nolint:testpackage
 
 import (
 	"bytes"
+	"context"
 	"go/parser"
 	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -404,4 +408,37 @@ func TestGen_Unresolvable(t *testing.T) {
 		RootType: "A",
 	})
 	require.ErrorIs(t, err, ErrUnresolvable)
+}
+
+func TestCodegen_ErrorWithValueRoot_BuildFails(t *testing.T) {
+	factories := []factory{
+		{varName: "cfg", ctor: "NewConfig", returnsErr: true, root: true},
+	}
+
+	dir := t.TempDir()
+
+	genPath := filepath.Join(dir, "wire_gen.go")
+	genFile, err := os.Create(genPath)
+	require.NoError(t, err)
+
+	err = generateCode(genFile, factories, Config{
+		PkgName:  "main",
+		FuncName: "Provide",
+		RootType: "Config",
+	})
+	require.NoError(t, err)
+	require.NoError(t, genFile.Close())
+
+	err = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module wiretest\ngo 1.22\n"), 0o644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(dir, "pkg.go"), []byte("package main\ntype Config struct{}\nfunc NewConfig() (Config, error) { return Config{}, nil }\nfunc main() { Provide() }\n"), 0o644)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", filepath.Join(dir, "out"))
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	t.Log(string(out))
+	require.NoError(t, err, "generated code with value root + error should compile: %s", string(out))
 }
