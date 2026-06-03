@@ -1,149 +1,201 @@
-package wire_test
+package wire //nolint:testpackage
 
 import (
 	"bytes"
 	"go/parser"
 	"go/token"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/thumbrise/gcce/composition"
-	"github.com/thumbrise/gcce/ecosystem/wire"
+	op "github.com/thumbrise/op-universal-schema-go/schema"
 )
 
-func newSrv() *http.Server                          { return &http.Server{} }
-func newMux() *http.ServeMux                        { return http.NewServeMux() }
-func newSrvWithMux(mux *http.ServeMux) *http.Server { return &http.Server{Handler: mux} }
-func newErrSrv() (*http.Server, error)              { return &http.Server{}, nil }
+type (
+	Config   struct{}
+	Server   struct{}
+	Handler  struct{}
+	App      struct{}
+	Logger   interface{ Log() }
+	MyLogger struct{}
+)
 
-func TestWire_Simple(t *testing.T) {
-	c, err := composition.New(
-		composition.Provide(newSrv),
-	)
-	require.NoError(t, err)
+func (m *MyLogger) Log() {}
 
-	steps, err := c.Resolve()
-	require.NoError(t, err)
-	require.Len(t, steps, 1)
+func NewConfig() Config           { return Config{} }
+func NewServer(Config) *Server    { return &Server{} }
+func NewHandler(*Server) *Handler { return &Handler{} }
+func NewApp(*Handler) *App        { return &App{} }
+func NewMyLogger() *MyLogger      { return &MyLogger{} }
 
-	var buf bytes.Buffer
+func NewErrServer(Config) (*Server, error)     { return &Server{}, nil }
+func NewErrApp(*Handler, Logger) (*App, error) { return &App{}, nil }
 
-	err = wire.Compile(&buf, steps, wire.Root(new(*http.Server)))
-	require.NoError(t, err)
+func NewMuxApp(mux *http.ServeMux) *App { return &App{} }
 
-	t.Log("generated:\n", buf.String())
+func requireValidGo(t *testing.T, src string) {
+	t.Helper()
 
-	fset := token.NewFileSet()
-	_, err = parser.ParseFile(fset, "", buf.Bytes(), parser.AllErrors)
-	require.NoError(t, err)
+	_, err := parser.ParseFile(token.NewFileSet(), "", src, 0)
+	if err != nil {
+		t.Fatalf("invalid Go source:\n%s\n\nerror: %v", src, err)
+	}
 }
 
-func TestWire_Chain(t *testing.T) {
-	c, err := composition.New(
-		composition.Provide(newMux),
-		composition.Provide(newSrvWithMux),
-	)
-	require.NoError(t, err)
+func requireContains(t *testing.T, src, substr string) {
+	t.Helper()
 
-	steps, err := c.Resolve()
-	require.NoError(t, err)
-	require.Len(t, steps, 2)
-
-	var buf bytes.Buffer
-
-	err = wire.Compile(&buf, steps, wire.Root(new(*http.Server)))
-	require.NoError(t, err)
-
-	t.Log("generated:\n", buf.String())
-
-	fset := token.NewFileSet()
-	_, err = parser.ParseFile(fset, "", buf.Bytes(), parser.AllErrors)
-	require.NoError(t, err)
+	if !strings.Contains(src, substr) {
+		t.Fatalf("expected %q to contain %q", src, substr)
+	}
 }
 
-func TestWire_WithError(t *testing.T) {
+func TestWire_SimpleChain(t *testing.T) {
 	c, err := composition.New(
-		composition.Provide(newErrSrv),
+		composition.Bind(NewConfig),
+		composition.Bind(NewServer),
+		composition.Bind(NewHandler),
+		composition.Bind(NewApp),
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Resolve()
+	ops, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
 
-	err = wire.Compile(&buf, steps, wire.Root(new(*http.Server)))
+	err = Compile(&buf, ops, Root(new(*App)))
 	require.NoError(t, err)
 
-	t.Log("generated:\n", buf.String())
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "func ProvideApp()")
+	requireContains(t, buf.String(), "return app")
+}
 
-	fset := token.NewFileSet()
-	_, err = parser.ParseFile(fset, "", buf.Bytes(), parser.AllErrors)
+func TestWire_WithInterface(t *testing.T) {
+	c, err := composition.New(
+		composition.Bind(NewMyLogger, composition.Implements((*Logger)(nil))),
+		composition.Bind(NewApp),
+		composition.Bind(NewHandler),
+		composition.Bind(NewServer),
+		composition.Bind(NewConfig),
+	)
 	require.NoError(t, err)
+
+	ops, err := c.Resolve()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+
+	err = Compile(&buf, ops, Root(new(*App)))
+	require.NoError(t, err)
+
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "return app")
+}
+
+func TestWire_ErrorMidChain(t *testing.T) {
+	c, err := composition.New(
+		composition.Bind(NewErrServer),
+		composition.Bind(NewHandler),
+		composition.Bind(NewApp),
+		composition.Bind(NewConfig),
+	)
+	require.NoError(t, err)
+
+	ops, err := c.Resolve()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+
+	err = Compile(&buf, ops, Root(new(*App)))
+	require.NoError(t, err)
+
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "if err != nil")
+	requireContains(t, buf.String(), "return nil, err")
+	requireContains(t, buf.String(), "error")
+}
+
+func TestWire_CrossPackage(t *testing.T) {
+	c, err := composition.New(
+		composition.Bind(http.NewServeMux),
+		composition.Bind(NewMuxApp),
+	)
+	require.NoError(t, err)
+
+	ops, err := c.Resolve()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+
+	err = Compile(&buf, ops, Root(new(*App)))
+	require.NoError(t, err)
+
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "import")
+	requireContains(t, buf.String(), "net/http")
 }
 
 func TestWire_CustomPackageName(t *testing.T) {
 	c, err := composition.New(
-		composition.Provide(newErrSrv),
+		composition.Bind(NewConfig),
+		composition.Bind(NewServer),
+		composition.Bind(NewHandler),
+		composition.Bind(NewApp),
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Resolve()
+	ops, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
 
-	err = wire.Compile(&buf, steps,
-		wire.Root(new(*http.Server)),
-		wire.PackageName("myapp"),
+	err = Compile(&buf, ops,
+		Root(new(*App)),
+		PackageName("custompkg"),
+		FunctionName("InitApp"),
 	)
 	require.NoError(t, err)
-	require.Contains(t, buf.String(), "package myapp")
+
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "package custompkg")
+	requireContains(t, buf.String(), "func InitApp")
 }
 
-func TestWire_CustomFunctionName(t *testing.T) {
+func TestWire_MissingRoot(t *testing.T) {
+	var buf bytes.Buffer
+
+	err := Compile(&buf, []op.Operation{})
+	require.ErrorIs(t, err, ErrRootRequired)
+}
+
+func TestWire_EmptyBindings(t *testing.T) {
+	c, err := composition.New()
+	require.NoError(t, err)
+
+	ops, err := c.Resolve()
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+
+	err = Compile(&buf, ops, Root(new(*App)))
+	require.ErrorIs(t, err, ErrRootNotFound)
+}
+
+func TestWire_RootTypeMismatch(t *testing.T) {
 	c, err := composition.New(
-		composition.Provide(newErrSrv),
+		composition.Bind(NewConfig),
 	)
 	require.NoError(t, err)
 
-	steps, err := c.Resolve()
+	ops, err := c.Resolve()
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
 
-	err = wire.Compile(&buf, steps,
-		wire.Root(new(*http.Server)),
-		wire.FunctionName("InitializeKernel"),
-	)
-	require.NoError(t, err)
-	require.Contains(t, buf.String(), "func InitializeKernel()")
-}
-
-func TestWire_Error_MissingRoot(t *testing.T) {
-	c, err := composition.New(
-		composition.Provide(newSrv),
-	)
-	require.NoError(t, err)
-
-	steps, err := c.Resolve()
-	require.NoError(t, err)
-
-	var buf bytes.Buffer
-
-	err = wire.Compile(&buf, steps, wire.Root(new(*http.Client)))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no step produces")
-}
-
-func TestWire_Error_MissingRootOption(t *testing.T) {
-	c, _ := composition.New()
-	steps, _ := c.Resolve()
-
-	var buf bytes.Buffer
-
-	err := wire.Compile(&buf, steps)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Root() option is required")
+	err = Compile(&buf, ops, Root(new(*App)))
+	require.ErrorIs(t, err, ErrRootNotFound)
 }
