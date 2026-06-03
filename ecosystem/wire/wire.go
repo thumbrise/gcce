@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrRootRequired = errors.New("wire: Root() option is required")
-	ErrRootNotFound = generator.ErrRootNotFound
+	ErrRootRequired  = errors.New("wire: Root() option is required")
+	ErrRootNotFound  = generator.ErrRootNotFound
+	errRootMustBePtr = errors.New("wire.Root: must be a pointer to a type, e.g. new(*Kernel)")
 )
 
 type config struct {
@@ -32,8 +33,8 @@ func (o option) apply(c *config) { o(c) }
 func Root(ptr interface{}) Option {
 	return option(func(c *config) {
 		t := reflect.TypeOf(ptr)
-		if t.Kind() != reflect.Pointer {
-			panic("wire.Root: must be a pointer to a type, e.g. new(*Kernel)")
+		if t == nil || t.Kind() != reflect.Pointer {
+			panic(errRootMustBePtr)
 		}
 
 		c.rootFQN = fqnOf(t.Elem())
