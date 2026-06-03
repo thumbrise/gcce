@@ -2,24 +2,21 @@ package wire
 
 import (
 	"errors"
-	"fmt"
-	"go/format"
 	"io"
 	"reflect"
+	"strings"
 
-	"github.com/thumbrise/gcce/composition"
+	"github.com/thumbrise/gcce/ecosystem/wire/generator"
+	op "github.com/thumbrise/op-universal-schema-go/schema"
 )
 
 var (
-	ErrRootRequired     = errors.New("wire: Root() option is required")
-	ErrRootNotFound     = errors.New("wire: no step produces root type")
-	ErrMultipleRoots    = errors.New("wire: multiple steps produce root type")
-	ErrStepReturnsError = errors.New("wire: step returns error but root does not")
-	ErrUnresolvable     = errors.New("wire: unresolvable type")
+	ErrRootRequired = errors.New("wire: Root() option is required")
+	ErrRootNotFound = generator.ErrRootNotFound
 )
 
 type config struct {
-	rootType     reflect.Type
+	rootFQN      string
 	packageName  string
 	functionName string
 }
@@ -32,41 +29,36 @@ type option func(*config)
 
 func (o option) apply(c *config) { o(c) }
 
-// Root sets the root type for code generation.
-// ptr must be a pointer to the target type, e.g. new(*Kernel).
 func Root(ptr interface{}) Option {
 	return option(func(c *config) {
 		t := reflect.TypeOf(ptr)
-		if t.Kind() != reflect.Pointer || t.Elem().Kind() == reflect.Interface {
+		if t.Kind() != reflect.Pointer {
 			panic("wire.Root: must be a pointer to a type, e.g. new(*Kernel)")
 		}
 
-		c.rootType = t.Elem()
+		c.rootFQN = fqnOf(t.Elem())
 	})
 }
 
-// PackageName sets the package name of the generated file.
 func PackageName(name string) Option {
 	return option(func(c *config) {
 		c.packageName = name
 	})
 }
 
-// FunctionName sets the name of the generated function.
 func FunctionName(name string) Option {
 	return option(func(c *config) {
 		c.functionName = name
 	})
 }
 
-// Compile generates Go source code from composition steps.
-func Compile(w io.Writer, steps []composition.Step, opts ...Option) error {
+func Compile(w io.Writer, operations []op.Operation, opts ...Option) error {
 	var cfg config
 	for _, opt := range opts {
 		opt.apply(&cfg)
 	}
 
-	if cfg.rootType == nil {
+	if cfg.rootFQN == "" {
 		return ErrRootRequired
 	}
 
@@ -75,20 +67,46 @@ func Compile(w io.Writer, steps []composition.Step, opts ...Option) error {
 	}
 
 	if cfg.functionName == "" {
-		cfg.functionName = "Provide" + typeNameForFunc(cfg.rootType.String())
+		lastDot := stringsLastDot(cfg.rootFQN)
+
+		short := cfg.rootFQN
+		if lastDot >= 0 {
+			short = cfg.rootFQN[lastDot+1:]
+		}
+
+		short = strings.TrimLeft(short, "*")
+		cfg.functionName = "Provide" + short
 	}
 
-	src, err := generate(steps, &cfg)
-	if err != nil {
-		return err
+	return generator.Generate(w, operations, generator.Config{
+		PkgName:  cfg.packageName,
+		FuncName: cfg.functionName,
+		RootType: cfg.rootFQN,
+	})
+}
+
+func fqnOf(t reflect.Type) string {
+	if t == nil {
+		return ""
 	}
 
-	formatted, err := format.Source([]byte(src))
-	if err != nil {
-		return fmt.Errorf("wire: go fmt failed: %w\n\n%s", err, src)
+	if t.Kind() == reflect.Pointer {
+		return "*" + fqnOf(t.Elem())
 	}
 
-	_, err = w.Write(formatted)
+	if t.PkgPath() == "" {
+		return t.Name()
+	}
 
-	return err
+	return t.PkgPath() + "." + t.Name()
+}
+
+func stringsLastDot(s string) int {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] == '.' {
+			return i
+		}
+	}
+
+	return -1
 }
