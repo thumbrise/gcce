@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/thumbrise/gcce/pkg/op-composition-go/trait"
 	"github.com/thumbrise/op-universal-schema-go/schema"
 )
 
@@ -25,19 +28,21 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	}
 
 	fnName := runtime.FuncForPC(fnReflVal.Pointer()).Name()
-	if fnName == "" {
+	if fnName == "" || strings.Contains(fnName, ".func") {
 		return operation, ErrIsAnonymous
 	}
 
 	operation.ID = fnName
 
 	fnReflTyp := fnReflVal.Type()
+
 	inputRail := make([]schema.Term, 0, fnReflTyp.NumIn())
 
 	for i := range fnReflTyp.NumIn() {
 		inTyp := fnReflTyp.In(i)
 
-		term, err := reflTypToTerm(inTyp)
+		id := fmt.Sprintf("input%d", i)
+		term, err := reflTypToTerm(id, inTyp)
 		if err != nil {
 			return operation, err
 		}
@@ -47,47 +52,47 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 
 	outputRail := make([]schema.Term, 0, fnReflTyp.NumOut())
 	errorRail := make([]schema.Term, 0, fnReflTyp.NumOut())
+
 	errorTypElem := reflect.TypeOf(new(error)).Elem()
 
+	errI := 0
+	outI := 0
 	for i := range fnReflTyp.NumOut() {
 		outTyp := fnReflTyp.Out(i)
 
-		term, err := reflTypToTerm(outTyp)
+		term, err := reflTypToTerm("", outTyp)
 		if err != nil {
 			return operation, err
 		}
 
 		if outTyp.Implements(errorTypElem) {
+			term.ID = fmt.Sprintf("error%d", errI)
 			errorRail = append(errorRail, term)
+			errI++
 		} else {
+			term.ID = fmt.Sprintf("output%d", outI)
 			outputRail = append(outputRail, term)
+			outI++
 		}
 	}
 
 	operation.Input = inputRail
 	operation.Output = outputRail
 	operation.Error = errorRail
+	operation.Trait = []schema.Term{}
 
 	return operation, nil
 }
 
-func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
-	id := ""
+func reflTypToTerm(id string, typ reflect.Type) (schema.Term, error) {
 	typElem := typ
+	fqn := typeToFQN(typ)
 	required := true
 
 	if typ.Kind() == reflect.Pointer {
-		id += "*"
 		typElem = typ.Elem()
 		required = false
 	}
-
-	prefix := typElem.PkgPath()
-	if prefix != "" {
-		prefix += "."
-	}
-
-	id += prefix + typElem.Name()
 
 	result := schema.Term{}
 
@@ -100,7 +105,9 @@ func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
 	result.Required = &required
 	result.Kind = &kind
 	result.Of = []schema.Term{}
-	result.Trait = []schema.Term{}
+	result.Trait = []schema.Term{
+		trait.NewFQN(fqn),
+	}
 
 	return result, nil
 }
@@ -142,9 +149,16 @@ func kindFromType(t reflect.Type) (schema.Kind, error) {
 	case reflect.Map:
 		// Map is represented as object in OP
 		return schema.KindObject, nil
+	case reflect.Interface:
+		errTyp := reflect.TypeOf(new(error)).Elem()
+		if t.Implements(errTyp) {
+			return schema.KindObject, nil
+		}
+
+		return "", fmt.Errorf("%w: only error interface supported, but given %v", ErrUnsupportedKind, t)
 	case reflect.Complex64, reflect.Complex128:
 		return "", fmt.Errorf("%w: complex numbers are not supported (type %v)", ErrUnsupportedKind, t)
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		return "", fmt.Errorf("%w: unserializable type %v", ErrUnsupportedKind, t.Kind())
 	case reflect.Invalid:
 		return "", fmt.Errorf("%w: literally invalid reflect kind", ErrUnsupportedKind)
@@ -153,5 +167,37 @@ func kindFromType(t reflect.Type) (schema.Kind, error) {
 
 	default:
 		return "", fmt.Errorf("%w: %v", ErrUnsupportedKind, t.Kind())
+	}
+}
+
+// typeToFQN returns the fully qualified name of a reflect.Type.
+// It handles named types (including basic types like "int", "string"),
+// pointers, slices, arrays, maps, and the special error interface.
+func typeToFQN(typ reflect.Type) string {
+	// Named type (including basic types with names like "int", "string")
+	if name := typ.Name(); name != "" {
+		if pkg := typ.PkgPath(); pkg != "" {
+			return pkg + "." + name
+		}
+		return name
+	}
+	// Unnamed composite types
+	switch typ.Kind() {
+	case reflect.Pointer:
+		return "*" + typeToFQN(typ.Elem())
+	case reflect.Slice:
+		return "[]" + typeToFQN(typ.Elem())
+	case reflect.Array:
+		return "[" + strconv.Itoa(typ.Len()) + "]" + typeToFQN(typ.Elem())
+	case reflect.Map:
+		return "map[" + typeToFQN(typ.Key()) + "]" + typeToFQN(typ.Elem())
+	case reflect.Interface:
+		// Special case for the built-in error interface
+		if typ == reflect.TypeOf((*error)(nil)).Elem() {
+			return "error"
+		}
+		return typ.String() // fallback, e.g., "interface {}"
+	default:
+		return typ.String()
 	}
 }
