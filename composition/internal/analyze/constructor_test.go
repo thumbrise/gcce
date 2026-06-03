@@ -78,9 +78,26 @@ func TestConstructor_MultiDeps(t *testing.T) {
 
 func stdlibDep(w io.Writer) error { return nil }
 
+func NewVariadic(plugins ...*Foo) *Bar { return &Bar{} }
+
 func TestConstructor_StdlibDep(t *testing.T) {
 	ctor, err := analyze.NewConstructor(stdlibDep)
 	require.NoError(t, err)
 	require.Len(t, ctor.Dependencies(), 1)
 	require.Equal(t, "io.Writer", ctor.Dependencies()[0])
+}
+
+func TestConstructor_IsVariadic(t *testing.T) {
+	ctor, err := analyze.NewConstructor(NewVariadic)
+	require.NoError(t, err)
+	require.True(t, ctor.IsVariadic())
+	require.Len(t, ctor.Dependencies(), 1)
+	require.Contains(t, ctor.Dependencies()[0], "[]")
+	require.Contains(t, ctor.Dependencies()[0], "Foo")
+}
+
+func TestConstructor_IsNotVariadic(t *testing.T) {
+	ctor, err := analyze.NewConstructor(NewMulti)
+	require.NoError(t, err)
+	require.False(t, ctor.IsVariadic())
 }

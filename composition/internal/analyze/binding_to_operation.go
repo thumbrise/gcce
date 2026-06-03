@@ -33,11 +33,17 @@ func BindingToOperation(binding *data.Binding) (op.Operation, error) {
 		Trait: []op.Term{trait.NewFQN(targetFQN)},
 	})
 
-	for _, inputFQN := range ctor.Dependencies() {
-		result.Input = append(result.Input, op.Term{
+	for i, inputFQN := range ctor.Dependencies() {
+		term := op.Term{
 			ID:    inputFQN,
 			Trait: []op.Term{trait.NewFQN(inputFQN)},
-		})
+		}
+
+		if ctor.IsVariadic() && i == len(ctor.Dependencies())-1 {
+			term.Trait = append(term.Trait, trait.NewVariadic())
+		}
+
+		result.Input = append(result.Input, term)
 	}
 
 	if ctor.ReturnsError() {

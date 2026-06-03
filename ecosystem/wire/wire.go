@@ -93,6 +93,10 @@ func fqnOf(t reflect.Type) string {
 		return "*" + fqnOf(t.Elem())
 	}
 
+	if t.Kind() == reflect.Slice {
+		return "[]" + fqnOf(t.Elem())
+	}
+
 	if t.PkgPath() == "" {
 		return t.Name()
 	}

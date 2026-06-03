@@ -46,7 +46,10 @@ func opErr(id, target string, deps ...string) op.Operation {
 func opIface(id, target string, implements []string, deps ...string) op.Operation {
 	implTraits := make([]op.Term, len(implements))
 	for i, impl := range implements {
-		implTraits[i] = op.Term{ID: trait.ImplementsID, Value: impl}
+		implTraits[i] = op.Term{
+			ID:    trait.ImplementsID,
+			Value: impl,
+		}
 	}
 
 	in := make([]op.Term, len(deps))
@@ -58,6 +61,17 @@ func opIface(id, target string, implements []string, deps ...string) op.Operatio
 		ID:     id,
 		Output: []op.Term{{ID: target, Trait: implTraits}},
 		Input:  in,
+	}
+}
+
+func opVariadic(id, target, dep string) op.Operation {
+	return op.Operation{
+		ID:     id,
+		Output: []op.Term{{ID: target}},
+		Input: []op.Term{{
+			ID:    dep,
+			Trait: []op.Term{trait.NewVariadic()},
+		}},
 	}
 }
 
@@ -138,8 +152,12 @@ func TestResolve_EmptyOps(t *testing.T) {
 }
 
 func TestResolve_UnresolvableDep(t *testing.T) {
-	_, err := resolve([]op.Operation{opStep("pkg.NewA", "A", "B")}, "A")
-	require.ErrorIs(t, err, ErrUnresolvable)
+	factories, err := resolve([]op.Operation{opStep("pkg.NewA", "A", "B")}, "A")
+	require.NoError(t, err)
+	require.Len(t, factories, 2)
+	require.Equal(t, "pkg.NewA", factories[0].ctor)
+	require.True(t, factories[1].external)
+	require.Equal(t, "B", factories[1].target)
 }
 
 func TestResolve_MultipleProviders(t *testing.T) {
@@ -238,6 +256,21 @@ func TestResolve_ErrVarNameReserved(t *testing.T) {
 	require.Equal(t, "app", factories[1].varName)
 }
 
+func TestResolve_VariadicDep(t *testing.T) {
+	ops := []op.Operation{
+		opVariadic("pkg.NewClient", "*pkg.Client", "[]pkg.Plugin"),
+		opStep("pkg.NewApp", "*pkg.App", "*pkg.Client"),
+	}
+
+	factories, err := resolve(ops, "*pkg.App")
+	require.NoError(t, err)
+	require.Len(t, factories, 3)
+	require.True(t, factories[0].variadic)
+	require.Equal(t, "client", factories[0].varName)
+	require.Len(t, factories[0].ctorArgs, 1)
+	require.Equal(t, "plugin", factories[0].ctorArgs[0])
+}
+
 // --- Codegen tests ---
 
 func TestCodegen_Simple(t *testing.T) {
@@ -266,6 +299,20 @@ func TestCodegen_WithError(t *testing.T) {
 	requireContains(t, buf.String(), "func Provide() (*pkg.Config, error)")
 	requireContains(t, buf.String(), "if err != nil")
 	requireContains(t, buf.String(), "return cfg, nil")
+}
+
+func TestCodegen_Variadic(t *testing.T) {
+	var buf bytes.Buffer
+
+	err := generateCode(&buf, []factory{
+		{varName: "plugins", ctor: "pkg.NewPlugins"},
+		{varName: "client", ctor: "pkg.NewClient", ctorArgs: []string{"plugins"}, variadic: true},
+		{varName: "app", ctor: "pkg.NewApp", ctorArgs: []string{"client"}, root: true},
+	}, Config{PkgName: "main", FuncName: "Provide", RootType: "*pkg.App"})
+
+	require.NoError(t, err)
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "client := pkg.NewClient(plugins...)")
 }
 
 func TestCodegen_MultipleSteps(t *testing.T) {
@@ -401,13 +448,35 @@ func TestGen_RootNotFound(t *testing.T) {
 	require.ErrorIs(t, err, ErrRootNotFound)
 }
 
-func TestGen_Unresolvable(t *testing.T) {
-	err := Generate(nil, []op.Operation{opStep("pkg.NewA", "A", "B")}, Config{
+func TestGen_ExternalDep(t *testing.T) {
+	var buf bytes.Buffer
+
+	err := Generate(&buf, []op.Operation{opStep("pkg.NewA", "A", "B")}, Config{
 		PkgName:  "main",
 		FuncName: "Provide",
 		RootType: "A",
 	})
-	require.ErrorIs(t, err, ErrUnresolvable)
+	require.NoError(t, err)
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "func Provide(b B) A")
+	requireContains(t, buf.String(), "return a")
+}
+
+func TestGen_VariadicDep(t *testing.T) {
+	var buf bytes.Buffer
+
+	err := Generate(&buf, []op.Operation{
+		opVariadic("pkg.NewClient", "*pkg.Client", "[]pkg.Plugin"),
+		opStep("pkg.NewApp", "*pkg.App", "*pkg.Client"),
+	}, Config{
+		PkgName:  "main",
+		FuncName: "ProvideApp",
+		RootType: "*pkg.App",
+	})
+	require.NoError(t, err)
+	requireValidGo(t, buf.String())
+	requireContains(t, buf.String(), "func ProvideApp(plugin []pkg.Plugin) *pkg.App")
+	requireContains(t, buf.String(), "client := pkg.NewClient(plugin...)")
 }
 
 func TestCodegen_ErrorWithValueRoot_BuildFails(t *testing.T) {
