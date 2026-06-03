@@ -37,7 +37,7 @@ jobs:
           args: --help
 
       - name: Run lint
-        run: task lint
+        run: golangci-lint run
 
   commitlint:
     name: Lint commit messages
