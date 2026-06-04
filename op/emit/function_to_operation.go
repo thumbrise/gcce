@@ -1,7 +1,6 @@
 package emit
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -15,14 +14,13 @@ import (
 )
 
 var (
-	ErrIsNotFunction   = errors.New("is not a function")
-	ErrIsAnonymous     = errors.New("is anonymous")
-	ErrUnsupportedKind = errors.New("unsupported kind")
+	ErrIsNotFunction = errors.New("is not a function")
+	ErrIsAnonymous   = errors.New("is anonymous")
 )
 
 // FunctionToOperation
 //
-//nolint:funlen // Orchestration
+
 func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	operation := schema.Operation{}
 
@@ -47,14 +45,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	for i := range fnReflTyp.NumIn() {
 		inTyp := fnReflTyp.In(i)
 
-		term, err := reflTypToTerm(inTyp)
-		if err != nil {
-			if errors.Is(err, errContextOccurred) {
-				continue
-			}
-
-			return operation, err
-		}
+		term := reflTypToTerm(inTyp)
 
 		term.ID = fmt.Sprintf("input%d", inpI)
 		inputRail = append(inputRail, term)
@@ -72,10 +63,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	for i := range fnReflTyp.NumOut() {
 		outTyp := fnReflTyp.Out(i)
 
-		term, err := reflTypToTerm(outTyp)
-		if err != nil {
-			return operation, err
-		}
+		term := reflTypToTerm(outTyp)
 
 		if outTyp.Implements(errorTypElem) {
 			term.ID = fmt.Sprintf("error%d", errI)
@@ -96,7 +84,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	return operation, nil
 }
 
-func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
+func reflTypToTerm(typ reflect.Type) schema.Term {
 	typElem := typ
 	fqn := typeToFQN(typ)
 	required := true
@@ -108,91 +96,68 @@ func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
 
 	result := schema.Term{}
 
-	kind, err := kindFromType(typElem)
-	if err != nil {
-		return result, err
-	}
-
 	result.Required = &required
-	result.Kind = &kind
+	result.Kind = kindFromType(typElem)
 	result.Of = []schema.Term{}
 	result.Trait = []schema.Term{
 		trait.NewFQN(fqn),
 	}
 
-	return result, nil
+	return result
 }
-
-var errContextOccurred = errors.New("context is occurred")
 
 // kindFromType maps a Go reflect.Type to an OP schema.Kind.
 // It handles special types like time.Time and byte slices before falling back to reflect.Kind.
 //
 //nolint:cyclop // No other ways
-func kindFromType(t reflect.Type) (schema.Kind, error) {
+func kindFromType(t reflect.Type) *schema.Kind {
 	// Special case: time.Time -> datetime
 	if t == reflect.TypeOf(time.Time{}) {
-		return schema.KindDatetime, nil
+		return new(schema.KindDatetime)
 	}
 
 	// Special case: []byte and [N]byte -> binary
 	if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
-		return schema.KindBinary, nil
+		return new(schema.KindBinary)
 	}
 
 	if t.Kind() == reflect.Array && t.Elem().Kind() == reflect.Uint8 {
-		return schema.KindBinary, nil
+		return new(schema.KindBinary)
 	}
 
 	switch t.Kind() {
 	case reflect.String:
-		return schema.KindString, nil
+		return new(schema.KindString)
 	case reflect.Bool:
-		return schema.KindBoolean, nil
+		return new(schema.KindBoolean)
 	case reflect.Float32, reflect.Float64:
-		return schema.KindFloat, nil
+		return new(schema.KindFloat)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return schema.KindInteger, nil
+		return new(schema.KindInteger)
 	case reflect.Array, reflect.Slice:
 		// If we didn't catch []byte above, it's a generic array
-		return schema.KindArray, nil
+		return new(schema.KindArray)
 	case reflect.Struct:
-		return schema.KindObject, nil
+		return new(schema.KindObject)
 	case reflect.Map:
 		// Map is represented as object in OP
-		return schema.KindObject, nil
-	case reflect.Interface:
-		errTyp := reflect.TypeOf(new(error)).Elem()
-		if t.Implements(errTyp) {
-			return schema.KindObject, nil
-		}
-
-		ctxTyp := reflect.TypeOf(new(context.Context)).Elem()
-		if t.Implements(ctxTyp) {
-			return "", errContextOccurred
-		}
-
-		return "", fmt.Errorf("%w: only error interface supported, but given %v", ErrUnsupportedKind, t)
-	case reflect.Complex64, reflect.Complex128:
-		return "", fmt.Errorf("%w: complex numbers are not supported (type %v)", ErrUnsupportedKind, t)
-	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		return "", fmt.Errorf("%w: unserializable type %v", ErrUnsupportedKind, t.Kind())
-	case reflect.Invalid:
-		return "", fmt.Errorf("%w: literally invalid reflect kind", ErrUnsupportedKind)
-	case reflect.Pointer, reflect.Uintptr:
-		return "", fmt.Errorf("%w: unexpected pointer (type %v)", ErrUnsupportedKind, t)
-
+		return new(schema.KindObject)
+	case reflect.Invalid,
+		reflect.Chan, reflect.Func, reflect.UnsafePointer,
+		reflect.Complex64, reflect.Complex128,
+		reflect.Interface,
+		reflect.Pointer, reflect.Uintptr:
+		return nil
 	default:
-		return "", fmt.Errorf("%w: %v", ErrUnsupportedKind, t.Kind())
+		return nil
 	}
 }
 
 // typeToFQN returns the fully qualified name of a reflect.Type.
 // It handles named types (including basic types like "int", "string"),
-// pointers, slices, arrays, maps, and the special error interface.
+// pointers, slices, arrays, maps.
 func typeToFQN(typ reflect.Type) string {
-	// Named type (including basic types with names like "int", "string")
 	if name := typ.Name(); name != "" {
 		if pkg := typ.PkgPath(); pkg != "" {
 			return pkg + "." + name
@@ -200,8 +165,7 @@ func typeToFQN(typ reflect.Type) string {
 
 		return name
 	}
-	// Unnamed composite types
-	//nolint:exhaustive // Defaulting
+
 	switch typ.Kind() {
 	case reflect.Pointer:
 		return "*" + typeToFQN(typ.Elem())
@@ -211,13 +175,6 @@ func typeToFQN(typ reflect.Type) string {
 		return "[" + strconv.Itoa(typ.Len()) + "]" + typeToFQN(typ.Elem())
 	case reflect.Map:
 		return "map[" + typeToFQN(typ.Key()) + "]" + typeToFQN(typ.Elem())
-	case reflect.Interface:
-		// Special case for the built-in error interface
-		if typ == reflect.TypeOf((*error)(nil)).Elem() {
-			return "error"
-		}
-
-		return typ.String() // fallback, e.g., "interface {}"
 	default:
 		return typ.String()
 	}
