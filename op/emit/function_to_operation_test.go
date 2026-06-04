@@ -1,6 +1,7 @@
 package emit_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -57,6 +58,10 @@ func MockFnMapSlice(m map[string]int, s []string) {}
 func MockFnPointerInput(in *MockInputSimple) {}
 
 func MockFnNamedError(in MockInputSimple) *MockError {
+	return nil
+}
+
+func MockFnContextInput(ctx context.Context, b int, c bool) *MockOutputSimple {
 	return nil
 }
 
@@ -393,5 +398,44 @@ func TestNonFunction(t *testing.T) {
 	require.ErrorIs(t, err, emit.ErrIsNotFunction)
 }
 
+func TestContextInputSkip(t *testing.T) {
+	expected := schema.Operation{
+		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnContextInput",
+		Input: []schema.Term{
+			{
+				ID:       "input0",
+				Required: ptr(true),
+				Kind:     kind(schema.KindInteger),
+				Of:       []schema.Term{},
+				Trait:    []schema.Term{trait.NewFQN("int")},
+			},
+			{
+				ID:       "input1",
+				Required: ptr(true),
+				Kind:     kind(schema.KindBoolean),
+				Of:       []schema.Term{},
+				Trait:    []schema.Term{trait.NewFQN("bool")},
+			},
+		},
+		Output: []schema.Term{
+			{
+				ID:       "output0",
+				Comment:  "",
+				Required: ptr(false),
+				Kind:     kind(schema.KindObject),
+				Value:    nil,
+				Of:       []schema.Term{},
+				Trait: []schema.Term{
+					trait.NewFQN("*github.com/thumbrise/gcce/op/emit_test.MockOutputSimple"),
+				},
+			},
+		},
+		Error: []schema.Term{},
+		Trait: []schema.Term{},
+	}
+	actual, err := emit.FunctionToOperation(MockFnContextInput)
+	require.NoError(t, err)
+	assert.Equal(t, expected, actual)
+}
 func ptr(b bool) *bool                { return &b }
 func kind(k schema.Kind) *schema.Kind { return &k }
