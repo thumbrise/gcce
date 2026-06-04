@@ -44,12 +44,12 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	for i := range fnReflTyp.NumIn() {
 		inTyp := fnReflTyp.In(i)
 
-		id := fmt.Sprintf("input%d", i)
-
-		term, err := reflTypToTerm(id, inTyp)
+		term, err := reflTypToTerm(inTyp)
 		if err != nil {
 			return operation, err
 		}
+
+		term.ID = fmt.Sprintf("input%d", i)
 
 		inputRail = append(inputRail, term)
 	}
@@ -65,7 +65,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	for i := range fnReflTyp.NumOut() {
 		outTyp := fnReflTyp.Out(i)
 
-		term, err := reflTypToTerm("", outTyp)
+		term, err := reflTypToTerm(outTyp)
 		if err != nil {
 			return operation, err
 		}
@@ -89,7 +89,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	return operation, nil
 }
 
-func reflTypToTerm(id string, typ reflect.Type) (schema.Term, error) {
+func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
 	typElem := typ
 	fqn := typeToFQN(typ)
 	required := true
@@ -106,7 +106,6 @@ func reflTypToTerm(id string, typ reflect.Type) (schema.Term, error) {
 		return result, err
 	}
 
-	result.ID = id
 	result.Required = &required
 	result.Kind = &kind
 	result.Of = []schema.Term{}
