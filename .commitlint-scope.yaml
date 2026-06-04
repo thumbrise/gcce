@@ -1,0 +1,9 @@
+#$schema: https://github.com/thumbrise/commitlint-scope/blob/main/docs/schema/config.v3.json
+
+# Scope parsing customization. Not required, if you follow common conventional header. In example: 'type!(scope): subject'
+#scopeRegex: ^[a-z]+(?:\((?P<scope>[^)]+)\))?!?:\s
+
+# Patterns list: each item specifies a list of scopes and the corresponding file glob patterns.
+patterns:
+  - scopes: ["op"]
+    files: ["op/**", "pkg/op-composition-go/**/*"]
