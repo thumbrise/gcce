@@ -1,6 +1,7 @@
 package emit
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -41,17 +42,23 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 
 	inputRail := make([]schema.Term, 0, fnReflTyp.NumIn())
 
+	inpI := 0
+
 	for i := range fnReflTyp.NumIn() {
 		inTyp := fnReflTyp.In(i)
 
 		term, err := reflTypToTerm(inTyp)
 		if err != nil {
+			if errors.Is(err, errContextOccurred) {
+				continue
+			}
+
 			return operation, err
 		}
 
-		term.ID = fmt.Sprintf("input%d", i)
-
+		term.ID = fmt.Sprintf("input%d", inpI)
 		inputRail = append(inputRail, term)
+		inpI++
 	}
 
 	outputRail := make([]schema.Term, 0, fnReflTyp.NumOut())
@@ -116,6 +123,8 @@ func reflTypToTerm(typ reflect.Type) (schema.Term, error) {
 	return result, nil
 }
 
+var errContextOccurred = errors.New("context is occurred")
+
 // kindFromType maps a Go reflect.Type to an OP schema.Kind.
 // It handles special types like time.Time and byte slices before falling back to reflect.Kind.
 //
@@ -157,6 +166,11 @@ func kindFromType(t reflect.Type) (schema.Kind, error) {
 		errTyp := reflect.TypeOf(new(error)).Elem()
 		if t.Implements(errTyp) {
 			return schema.KindObject, nil
+		}
+
+		ctxTyp := reflect.TypeOf(new(context.Context)).Elem()
+		if t.Implements(ctxTyp) {
+			return "", errContextOccurred
 		}
 
 		return "", fmt.Errorf("%w: only error interface supported, but given %v", ErrUnsupportedKind, t)
