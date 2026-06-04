@@ -19,6 +19,9 @@ var (
 	ErrUnsupportedKind = errors.New("unsupported kind")
 )
 
+// FunctionToOperation
+//
+//nolint:funlen // Orchestration
 func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	operation := schema.Operation{}
 
@@ -42,6 +45,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 		inTyp := fnReflTyp.In(i)
 
 		id := fmt.Sprintf("input%d", i)
+
 		term, err := reflTypToTerm(id, inTyp)
 		if err != nil {
 			return operation, err
@@ -57,6 +61,7 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 
 	errI := 0
 	outI := 0
+
 	for i := range fnReflTyp.NumOut() {
 		outTyp := fnReflTyp.Out(i)
 
@@ -179,9 +184,11 @@ func typeToFQN(typ reflect.Type) string {
 		if pkg := typ.PkgPath(); pkg != "" {
 			return pkg + "." + name
 		}
+
 		return name
 	}
 	// Unnamed composite types
+	//nolint:exhaustive // Defaulting
 	switch typ.Kind() {
 	case reflect.Pointer:
 		return "*" + typeToFQN(typ.Elem())
@@ -196,6 +203,7 @@ func typeToFQN(typ reflect.Type) string {
 		if typ == reflect.TypeOf((*error)(nil)).Elem() {
 			return "error"
 		}
+
 		return typ.String() // fallback, e.g., "interface {}"
 	default:
 		return typ.String()
