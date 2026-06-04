@@ -192,7 +192,7 @@ func TestMultiOutputFn(t *testing.T) {
 		Error: []schema.Term{{
 			ID:       "error0",
 			Required: ptr(true),
-			Kind:     kind(schema.KindObject),
+			Kind:     nil,
 			Of:       []schema.Term{},
 			Trait:    []schema.Term{trait.NewFQN("error")},
 		}},
@@ -217,7 +217,7 @@ func TestOnlyErrorFn(t *testing.T) {
 		Error: []schema.Term{{
 			ID:       "error0",
 			Required: ptr(true),
-			Kind:     kind(schema.KindObject),
+			Kind:     nil,
 			Of:       []schema.Term{},
 			Trait:    []schema.Term{trait.NewFQN("error")},
 		}},
@@ -398,19 +398,26 @@ func TestNonFunction(t *testing.T) {
 	require.ErrorIs(t, err, emit.ErrIsNotFunction)
 }
 
-func TestContextInputSkip(t *testing.T) {
+func TestContextInputAsIt(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnContextInput",
 		Input: []schema.Term{
 			{
 				ID:       "input0",
 				Required: ptr(true),
+				Kind:     nil,
+				Of:       []schema.Term{},
+				Trait:    []schema.Term{trait.NewFQN("context.Context")},
+			},
+			{
+				ID:       "input1",
+				Required: ptr(true),
 				Kind:     kind(schema.KindInteger),
 				Of:       []schema.Term{},
 				Trait:    []schema.Term{trait.NewFQN("int")},
 			},
 			{
-				ID:       "input1",
+				ID:       "input2",
 				Required: ptr(true),
 				Kind:     kind(schema.KindBoolean),
 				Of:       []schema.Term{},
