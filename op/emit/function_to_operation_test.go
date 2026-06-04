@@ -27,44 +27,6 @@ func MockFn(input MockInput) (*MockOutput, *MockError) {
 	return &MockOutput{}, nil
 }
 
-func MockFnNoError(in MockInputSimple) MockOutputSimple {
-	return MockOutputSimple{}
-}
-
-func MockFnMultiInput(a string, b int, c bool) *MockOutputSimple {
-	return nil
-}
-
-func MockFnMultiOutput(in MockInputSimple) (MockOutputSimple, error) {
-	return MockOutputSimple{}, nil
-}
-
-func MockFnOnlyError(in MockInputSimple) error {
-	return nil
-}
-
-func MockFnOnlyOutput(in MockInputSimple) MockOutputSimple {
-	return MockOutputSimple{}
-}
-
-func MockFnVariadic(prefix string, nums ...int) MockOutputSimple {
-	return MockOutputSimple{}
-}
-
-func MockFnTimeBytes(t time.Time, data []byte) {}
-
-func MockFnMapSlice(m map[string]int, s []string) {}
-
-func MockFnPointerInput(in *MockInputSimple) {}
-
-func MockFnNamedError(in MockInputSimple) *MockError {
-	return nil
-}
-
-func MockFnContextInput(ctx context.Context, b int, c bool) *MockOutputSimple {
-	return nil
-}
-
 func TestFunctionToOperation(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFn",
@@ -102,6 +64,10 @@ func TestFunctionToOperation(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func MockFnNoError(in MockInputSimple) MockOutputSimple {
+	return MockOutputSimple{}
+}
+
 func TestNoErrorFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnNoError",
@@ -129,6 +95,10 @@ func TestNoErrorFn(t *testing.T) {
 	actual, err := emit.FunctionToOperation(MockFnNoError)
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
+}
+
+func MockFnMultiInput(a string, b int, c bool) *MockOutputSimple {
+	return nil
 }
 
 func TestMultiInputFn(t *testing.T) {
@@ -172,6 +142,10 @@ func TestMultiInputFn(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func MockFnMultiOutput(in MockInputSimple) (MockOutputSimple, error) {
+	return MockOutputSimple{}, nil
+}
+
 func TestMultiOutputFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnMultiOutput",
@@ -203,6 +177,10 @@ func TestMultiOutputFn(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func MockFnOnlyError(in MockInputSimple) error {
+	return nil
+}
+
 func TestOnlyErrorFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnOnlyError",
@@ -228,6 +206,10 @@ func TestOnlyErrorFn(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func MockFnOnlyOutput(in MockInputSimple) MockOutputSimple {
+	return MockOutputSimple{}
+}
+
 func TestOnlyOutputFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnOnlyOutput",
@@ -251,6 +233,10 @@ func TestOnlyOutputFn(t *testing.T) {
 	actual, err := emit.FunctionToOperation(MockFnOnlyOutput)
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
+}
+
+func MockFnVariadic(prefix string, nums ...int) MockOutputSimple {
+	return MockOutputSimple{}
 }
 
 func TestVariadicFn(t *testing.T) {
@@ -286,7 +272,7 @@ func TestVariadicFn(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }
-
+func MockFnTimeBytes(t time.Time, data []byte) {}
 func TestTimeBytesFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnTimeBytes",
@@ -314,7 +300,7 @@ func TestTimeBytesFn(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }
-
+func MockFnMapSlice(m map[string]int, s []string) {}
 func TestMapSliceFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnMapSlice",
@@ -342,7 +328,7 @@ func TestMapSliceFn(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
 }
-
+func MockFnPointerInput(in *MockInputSimple) {}
 func TestPointerInputFn(t *testing.T) {
 	expected := schema.Operation{
 		ID: "github.com/thumbrise/gcce/op/emit_test.MockFnPointerInput",
@@ -360,6 +346,10 @@ func TestPointerInputFn(t *testing.T) {
 	actual, err := emit.FunctionToOperation(MockFnPointerInput)
 	require.NoError(t, err)
 	assert.Equal(t, expected, actual)
+}
+
+func MockFnNamedError(in MockInputSimple) *MockError {
+	return nil
 }
 
 func TestNamedErrorFn(t *testing.T) {
@@ -396,6 +386,10 @@ func TestAnonymousFunction(t *testing.T) {
 func TestNonFunction(t *testing.T) {
 	_, err := emit.FunctionToOperation("not a func")
 	require.ErrorIs(t, err, emit.ErrIsNotFunction)
+}
+
+func MockFnContextInput(ctx context.Context, b int, c bool) *MockOutputSimple {
+	return nil
 }
 
 func TestContextInputAsIt(t *testing.T) {
