@@ -89,9 +89,14 @@ func reflTypToTerm(typ reflect.Type) schema.Term {
 	fqn := typeToFQN(typ)
 	required := true
 
-	if typ.Kind() == reflect.Pointer {
+	//nolint:exhaustive // No more needs
+	switch typ.Kind() {
+	case reflect.Pointer:
 		typElem = typ.Elem()
 		required = false
+	case reflect.Interface:
+		required = false
+	default:
 	}
 
 	result := schema.Term{}

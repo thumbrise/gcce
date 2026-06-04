@@ -165,7 +165,7 @@ func TestMultiOutputFn(t *testing.T) {
 		}},
 		Error: []schema.Term{{
 			ID:       "error0",
-			Required: ptr(true),
+			Required: ptr(false),
 			Kind:     nil,
 			Of:       []schema.Term{},
 			Trait:    []schema.Term{trait.NewFQN("error")},
@@ -194,7 +194,7 @@ func TestOnlyErrorFn(t *testing.T) {
 		Output: []schema.Term{},
 		Error: []schema.Term{{
 			ID:       "error0",
-			Required: ptr(true),
+			Required: ptr(false),
 			Kind:     nil,
 			Of:       []schema.Term{},
 			Trait:    []schema.Term{trait.NewFQN("error")},
@@ -366,9 +366,10 @@ func TestNamedErrorFn(t *testing.T) {
 		Error: []schema.Term{{
 			ID:       "error0",
 			Required: ptr(false),
-			Kind:     kind(schema.KindObject),
-			Of:       []schema.Term{},
-			Trait:    []schema.Term{trait.NewFQN("*github.com/thumbrise/gcce/op/emit_test.MockError")},
+			// It's named custom error struct
+			Kind:  kind(schema.KindObject),
+			Of:    []schema.Term{},
+			Trait: []schema.Term{trait.NewFQN("*github.com/thumbrise/gcce/op/emit_test.MockError")},
 		}},
 		Trait: []schema.Term{},
 	}
@@ -398,7 +399,7 @@ func TestContextInputAsIt(t *testing.T) {
 		Input: []schema.Term{
 			{
 				ID:       "input0",
-				Required: ptr(true),
+				Required: ptr(false),
 				Kind:     nil,
 				Of:       []schema.Term{},
 				Trait:    []schema.Term{trait.NewFQN("context.Context")},
