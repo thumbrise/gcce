@@ -166,6 +166,7 @@ func typeToFQN(typ reflect.Type) string {
 		return name
 	}
 
+	//nolint:exhaustive // Defaulting
 	switch typ.Kind() {
 	case reflect.Pointer:
 		return "*" + typeToFQN(typ.Elem())
