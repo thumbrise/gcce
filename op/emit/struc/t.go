@@ -23,17 +23,19 @@ func T(v interface{}) ([]schema.Operation, error) {
 	}
 
 	val := reflect.ValueOf(v)
-
 	typ := val.Type()
-	if typ.Kind() == reflect.Pointer {
-		typ = typ.Elem()
+
+	// Ensure we always work with a pointer to the struct to see all methods.
+	if typ.Kind() != reflect.Pointer {
+		typ = reflect.PointerTo(typ)
 	}
 
-	if typ.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("%w, v (%s)", ErrNotStruct, typ.Kind())
+	elem := typ.Elem()
+	if elem.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("%w, got %s", ErrNotStruct, elem.Kind())
 	}
 
-	groupName := typ.Name()
+	groupName := elem.Name()
 
 	var ops []schema.Operation
 
