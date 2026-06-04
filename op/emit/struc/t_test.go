@@ -25,8 +25,8 @@ func TestT_AuthService(t *testing.T) {
 	require.Len(t, ops, 2)
 
 	expectedIDs := []string{
-		"github.com/thumbrise/gcce/op/emit/struc_test.AuthService.Login",
-		"github.com/thumbrise/gcce/op/emit/struc_test.AuthService.QueryMe",
+		"github.com/thumbrise/gcce/op/emit/struc_test.(*AuthService).Login",
+		"github.com/thumbrise/gcce/op/emit/struc_test.(*AuthService).QueryMe",
 	}
 
 	actualIDs := make([]string, 0, len(expectedIDs))
@@ -65,4 +65,54 @@ func TestT_NotStruct(t *testing.T) {
 func TestT_Nil(t *testing.T) {
 	_, err := struc.T(nil)
 	require.ErrorIs(t, err, struc.ErrNil)
+}
+
+// Add to struc_test.go
+
+type ServiceWithPtr struct{}
+
+func (*ServiceWithPtr) Process() string { return "ok" }
+
+type ValueAndPtrService struct{}
+
+func (v ValueAndPtrService) ByValue() string { return "" }
+func (v *ValueAndPtrService) ByPtr() string  { return "" }
+
+//nolint:unused
+func (v *ValueAndPtrService) private() {}
+
+func TestT_ValueWithPointerMethod(t *testing.T) {
+	ops, err := struc.T(ServiceWithPtr{})
+	require.NoError(t, err)
+	require.Len(t, ops, 1)
+	assert.Contains(t, ops[0].ID, "Process")
+	require.Len(t, ops[0].Trait, 1)
+	assert.Equal(t, trait.NewGroup("ServiceWithPtr"), ops[0].Trait[0])
+}
+
+func TestT_PointerWithPointerMethod(t *testing.T) {
+	ops, err := struc.T(&ServiceWithPtr{})
+	require.NoError(t, err)
+	require.Len(t, ops, 1)
+	assert.Contains(t, ops[0].ID, "Process")
+}
+
+func TestT_ValueWithBothReceivers(t *testing.T) {
+	ops, err := struc.T(ValueAndPtrService{})
+	require.NoError(t, err)
+	require.Len(t, ops, 2)
+
+	expectedIDs := []string{
+		"github.com/thumbrise/gcce/op/emit/struc_test.(*ValueAndPtrService).ByValue",
+		"github.com/thumbrise/gcce/op/emit/struc_test.(*ValueAndPtrService).ByPtr",
+	}
+
+	actualIDs := make([]string, 0, len(expectedIDs))
+	for _, op := range ops {
+		actualIDs = append(actualIDs, op.ID)
+		require.Len(t, op.Trait, 1)
+		assert.Equal(t, trait.NewGroup("ValueAndPtrService"), op.Trait[0])
+	}
+
+	assert.ElementsMatch(t, expectedIDs, actualIDs)
 }
