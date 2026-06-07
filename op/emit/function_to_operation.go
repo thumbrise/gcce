@@ -18,9 +18,6 @@ var (
 	ErrIsAnonymous   = errors.New("is anonymous")
 )
 
-// FunctionToOperation
-//
-
 func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 	operation := schema.Operation{}
 
