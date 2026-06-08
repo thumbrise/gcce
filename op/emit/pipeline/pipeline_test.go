@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 
@@ -263,6 +264,42 @@ func pKind(k schema.Kind) *schema.Kind { return &k }
 
 func testOperationFields(name string, age int) (string, error) {
 	return "", nil
+}
+
+type mockLedger struct {
+	buf bytes.Buffer
+}
+
+func (l *mockLedger) Log(path, reason string, prev, next any) {
+	l.buf.WriteString(path + " " + reason + "\n")
+}
+
+func TestPipeline_LedgerCapturesOutput(t *testing.T) {
+	ledger := &mockLedger{}
+	ppln := pipeline.NewPipeline(
+		contract.InstructionRegistration{ID: "test-ledger"},
+		[]contract.OperationRegistration{
+			{FN: addGreeting},
+		},
+	)
+	ppln.Ledger = ledger
+
+	_, err := ppln.Compile()
+	require.NoError(t, err)
+	require.NotEmpty(t, ledger.buf.String(), "ledger should have captured pipeline activity")
+}
+
+func TestPipeline_LedgerDefaultDoesNotCrash(t *testing.T) {
+	ppln := pipeline.NewPipeline(
+		contract.InstructionRegistration{ID: "test-default-ledger"},
+		[]contract.OperationRegistration{
+			{FN: addGreeting},
+		},
+	)
+	// Ledger is nil — should use default PrettyDiffLedger(os.Stdout)
+
+	_, err := ppln.Compile()
+	require.NoError(t, err)
 }
 
 func TestPipeline_OperationFields(t *testing.T) {

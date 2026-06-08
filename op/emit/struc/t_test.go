@@ -67,6 +67,13 @@ func TestT_Nil(t *testing.T) {
 	require.ErrorIs(t, err, struc.ErrNil)
 }
 
+func TestT_TypedNilPointer(t *testing.T) {
+	var svc *AuthService = nil
+
+	_, err := struc.T(svc)
+	require.ErrorIs(t, err, struc.ErrNil)
+}
+
 // Add to struc_test.go
 
 type ServiceWithPtr struct{}

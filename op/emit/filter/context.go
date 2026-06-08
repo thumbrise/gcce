@@ -8,6 +8,7 @@ import (
 )
 
 // Context removes context.Context parameters from all operation inputs and renumbers the remaining inputs.
+// The input slice is modified in place and returned as a convenience.
 func Context(operations []schema.Operation) []schema.Operation {
 	for i := range operations {
 		op := &operations[i]
@@ -28,9 +29,11 @@ func Context(operations []schema.Operation) []schema.Operation {
 	return operations
 }
 
+const contextTraitValue = "context.Context"
+
 func isContext(term schema.Term) bool {
 	for _, t := range term.Trait {
-		if t.ID == trait.FQNID && t.Value == "context.Context" {
+		if t.ID == trait.FQNID && t.Value == contextTraitValue {
 			return true
 		}
 	}

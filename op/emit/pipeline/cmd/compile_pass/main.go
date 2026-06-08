@@ -30,7 +30,8 @@ func main() {
 		log.Fatalf("MkdirAll: %v", err)
 	}
 
-	err = os.WriteFile(path.Join(outDir, outFile), out, 0o600)
+	//nolint:gosec // Generated source code needs world-readable permissions
+	err = os.WriteFile(path.Join(outDir, outFile), out, 0o644)
 	if err != nil {
 		log.Fatalf("WriteFile: %v", err)
 	}
