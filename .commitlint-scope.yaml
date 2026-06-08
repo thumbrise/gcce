@@ -5,5 +5,11 @@
 
 # Patterns list: each item specifies a list of scopes and the corresponding file glob patterns.
 patterns:
-  - scopes: ["op"]
-    files: ["op/**", "pkg/op-composition-go/**/*"]
+  - scopes: [ "op" ]
+    files: [ "op/**", "pkg/op-composition-go/**/*" ]
+
+  - scopes: [ "dependencies" ]
+    files: [ "**/go.mod", "**/go.sum" ]
+
+  - scopes: [ "examples" ]
+    files: [ "examples/**" ]
