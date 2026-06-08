@@ -30,6 +30,7 @@ const (
 type Pipeline struct {
 	instructionRegistration contract.InstructionRegistration
 	operationRegistrations  []contract.OperationRegistration
+	Ledger                  pipass.Ledger
 }
 
 func NewPipeline(instructionRegistration contract.InstructionRegistration, operationRegistrations []contract.OperationRegistration) *Pipeline {
@@ -40,26 +41,13 @@ func NewPipeline(instructionRegistration contract.InstructionRegistration, opera
 }
 
 func (p *Pipeline) Compile() (*schema.Instruction, error) {
-	ledger := NewPrettyDiffLedger(os.Stderr)
+	ledger := p.Ledger
+	if ledger == nil {
+		ledger = NewPrettyDiffLedger(os.Stdout)
+	}
+
 	instructionPass := passgen.NewInstructionPipePass("instruction", ledger)
-
-	if p.instructionRegistration.ID != "" {
-		instructionPass.SetID(p.instructionRegistration.ID, userDefineReason)
-	} else {
-		instructionPass.SetID(instructionIDUnknown, coreEnrichmentReason)
-	}
-
-	if p.instructionRegistration.Comment != "" {
-		instructionPass.SetComment(p.instructionRegistration.Comment, userDefineReason)
-	} else {
-		instructionPass.SetComment(instructionCommentUnknown, coreEnrichmentReason)
-	}
-
-	if p.instructionRegistration.Version != "" {
-		instructionPass.SetVersion(p.instructionRegistration.Version, userDefineReason)
-	} else {
-		instructionPass.SetVersion(instructionVersionUnknown, coreEnrichmentReason)
-	}
+	setInstructionMetadata(instructionPass, p.instructionRegistration)
 
 	for _, registration := range p.operationRegistrations {
 		opPass, err := buildOperationPass(registration.FN, instructionPass, ledger)
@@ -111,6 +99,26 @@ func instructionToSchema(instrPass *passgen.InstructionPipePass) *schema.Instruc
 	}
 
 	return result
+}
+
+func setInstructionMetadata(instructionPass *passgen.InstructionPipePass, reg contract.InstructionRegistration) {
+	if reg.ID != "" {
+		instructionPass.SetID(reg.ID, userDefineReason)
+	} else {
+		instructionPass.SetID(instructionIDUnknown, coreEnrichmentReason)
+	}
+
+	if reg.Comment != "" {
+		instructionPass.SetComment(reg.Comment, userDefineReason)
+	} else {
+		instructionPass.SetComment(instructionCommentUnknown, coreEnrichmentReason)
+	}
+
+	if reg.Version != "" {
+		instructionPass.SetVersion(reg.Version, userDefineReason)
+	} else {
+		instructionPass.SetVersion(instructionVersionUnknown, coreEnrichmentReason)
+	}
 }
 
 func buildOperationPass(fn interface{}, instrPass *passgen.InstructionPipePass, ledger pipass.Ledger) (*passgen.OperationPipePass, error) {

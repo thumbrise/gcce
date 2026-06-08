@@ -23,7 +23,13 @@ func T(v interface{}) ([]schema.Operation, error) {
 	}
 
 	val := reflect.ValueOf(v)
+	if val.Kind() == reflect.Pointer && val.IsNil() {
+		return nil, ErrNil
+	}
+
 	typ := val.Type()
+
+	// Ensure we always work with a pointer to the struct to see all methods.
 
 	// Ensure we always work with a pointer to the struct to see all methods.
 	if typ.Kind() != reflect.Pointer {

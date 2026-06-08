@@ -37,16 +37,13 @@ func FunctionToOperation(fn interface{}) (schema.Operation, error) {
 
 	inputRail := make([]schema.Term, 0, fnReflTyp.NumIn())
 
-	inpI := 0
-
 	for i := range fnReflTyp.NumIn() {
 		inTyp := fnReflTyp.In(i)
 
 		term := reflTypToTerm(inTyp)
 
-		term.ID = fmt.Sprintf("input%d", inpI)
+		term.ID = fmt.Sprintf("input%d", i)
 		inputRail = append(inputRail, term)
-		inpI++
 	}
 
 	outputRail := make([]schema.Term, 0, fnReflTyp.NumOut())
@@ -110,6 +107,8 @@ func reflTypToTerm(typ reflect.Type) schema.Term {
 
 // kindFromType maps a Go reflect.Type to an OP schema.Kind.
 // It handles special types like time.Time and byte slices before falling back to reflect.Kind.
+// Returns nil for unsupported or unserializable kinds (chan, func, unsafe pointer, etc.).
+// A nil Kind means "unknown/unhandled" and is omitted in serialized output.
 //
 //nolint:cyclop // No other ways
 func kindFromType(t reflect.Type) *schema.Kind {
